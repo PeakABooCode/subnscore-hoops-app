@@ -47,24 +47,72 @@ export default function App() {
   });
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
-  // --- Game State ---
-  const [teamMeta, setTeamMeta] = useState({
-    teamName: "",
-    opponent: "",
-    league: "",
-    season: "Fall 2026",
+  // --- Game State (With LocalStorage Safety Net) ---
+  const [teamMeta, setTeamMeta] = useState(() => {
+    try {
+      const savedMeta = localStorage.getItem("subnscore_teamMeta");
+      const parsed = savedMeta ? JSON.parse(savedMeta) : null;
+      // If parsed is null, force it to the default object
+      return (
+        parsed || {
+          teamName: "",
+          opponent: "",
+          league: "",
+          season: "Fall 2026",
+        }
+      );
+    } catch {
+      return { teamName: "", opponent: "", league: "", season: "Fall 2026" };
+    }
   });
-  const [roster, setRoster] = useState([]);
+
+  const [roster, setRoster] = useState(() => {
+    try {
+      const savedRoster = localStorage.getItem("subnscore_roster");
+      const parsed = savedRoster ? JSON.parse(savedRoster) : null;
+      // Force it to be an array. If corrupted, return empty array []
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [playerStats, setPlayerStats] = useState(() => {
+    try {
+      const savedStats = localStorage.getItem("subnscore_playerStats");
+      const parsed = savedStats ? JSON.parse(savedStats) : null;
+      // If parsed is null, force it to an empty object {}
+      return parsed || {};
+    } catch {
+      return {};
+    }
+  });
+
+  // RESTORED: These are the variables that accidentally got deleted!
   const [newPlayer, setNewPlayer] = useState({ name: "", jersey: "" });
   const [clock, setClock] = useState(QUARTER_SECONDS);
   const [isRunning, setIsRunning] = useState(false);
   const [quarter, setQuarter] = useState(1);
   const [court, setCourt] = useState([]);
   const [stints, setStints] = useState([]);
-  const [playerStats, setPlayerStats] = useState({});
+
+  // EXISTING VARIABLES
   const [teamFouls, setTeamFouls] = useState({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
   const [timeouts, setTimeouts] = useState([]);
   const [setupAttempted, setSetupAttempted] = useState(false);
+
+  // --- LocalStorage Auto-Savers ---
+  useEffect(() => {
+    localStorage.setItem("subnscore_teamMeta", JSON.stringify(teamMeta));
+  }, [teamMeta]);
+
+  useEffect(() => {
+    localStorage.setItem("subnscore_roster", JSON.stringify(roster));
+  }, [roster]);
+
+  useEffect(() => {
+    localStorage.setItem("subnscore_playerStats", JSON.stringify(playerStats));
+  }, [playerStats]);
 
   // --- Session Check ---
   useEffect(() => {
