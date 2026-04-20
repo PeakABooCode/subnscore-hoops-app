@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { Activity, LogOut } from "lucide-react"; // Only keeping the icons actually used here
 
-// --- Imports from your new refactored folders ---
+// --- Imports from the new refactored folders ---
 import AuthView from "./components/AuthView";
 import SetupView from "./components/SetupView";
 import LiveView from "./components/LiveView";
@@ -151,6 +151,44 @@ export default function App() {
     } catch (err) {
       showNotification("Error logging out.");
     }
+  };
+
+  const resetGame = () => {
+    // 1. Ask for confirmation so they don't click it accidentally!
+    if (
+      !window.confirm(
+        "Are you sure you want to start a new game? All current stats will be cleared.",
+      )
+    )
+      return;
+
+    // 2. Wipe the browser's memory
+    localStorage.removeItem("subnscore_teamMeta");
+    localStorage.removeItem("subnscore_roster");
+    localStorage.removeItem("subnscore_playerStats");
+
+    // 3. Reset all React State back to default
+    setTeamMeta({
+      teamName: "",
+      opponent: "",
+      league: "",
+      season: "Fall 2026",
+    });
+    setRoster([]);
+    setPlayerStats({});
+    setCourt([]);
+    setStints([]);
+    setQuarter(1);
+    setClock(QUARTER_SECONDS);
+    setIsRunning(false);
+    setTeamFouls({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+    setTimeouts([]);
+    setActionHistory([]);
+    setSetupAttempted(false);
+
+    // 4. Send them back to the Setup screen
+    setView("SETUP");
+    showNotification("New game started. Data cleared!");
   };
 
   const handleDemoLogin = () => {
@@ -385,6 +423,7 @@ export default function App() {
             handleRemovePlayer={handleRemovePlayer}
             startGame={startGame}
             setupAttempted={setupAttempted}
+            resetGame={resetGame}
           />
         )}
         {user && view === "LIVE" && (
@@ -416,6 +455,7 @@ export default function App() {
             clock={clock}
             teamMeta={teamMeta}
             quarter={quarter}
+            resetGame={resetGame}
           />
         )}
       </main>

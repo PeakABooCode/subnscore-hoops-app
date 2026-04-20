@@ -8,6 +8,7 @@ export default function StatsView({
   clock,
   teamMeta,
   quarter,
+  resetGame,
 }) {
   const calculateMins = (pId) => {
     let total = 0;
@@ -54,6 +55,16 @@ export default function StatsView({
           ))}
         </tbody>
       </table>
+
+      {/* NEW: Start New Game Button */}
+      <div className="flex justify-end">
+        <button
+          onClick={resetGame}
+          className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-xl shadow-md transition-all"
+        >
+          Trash Game & Start Over
+        </button>
+      </div>
     </div>
   );
 }

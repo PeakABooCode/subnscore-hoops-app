@@ -12,6 +12,7 @@ export default function SetupView({
   handleRemovePlayer,
   startGame,
   setupAttempted,
+  resetGame,
 }) {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -138,6 +139,16 @@ export default function SetupView({
       >
         <Play fill="currentColor" size={20} /> Start Game Tracking
       </button>
+
+      {/* NEW: Reset Data Button */}
+      <div className="flex justify-center mt-4">
+        <button
+          onClick={resetGame}
+          className="text-red-500 hover:text-red-700 text-sm font-bold underline transition-colors"
+        >
+          Clear all saved data and start fresh
+        </button>
+      </div>
 
       <p className="text-center text-slate-400 text-xs">
         Logged in as {user?.email || "Guest Coach"}
