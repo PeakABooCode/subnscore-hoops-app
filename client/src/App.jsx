@@ -222,6 +222,10 @@ export default function App() {
     setPlayerStats(newStats);
   };
 
+  const handleEditPlayer = (id, newName) => {
+    setRoster(roster.map((p) => (p.id === id ? { ...p, name: newName } : p)));
+  };
+
   const startGame = () => {
     setSetupAttempted(true);
 
@@ -519,6 +523,7 @@ export default function App() {
             setNewPlayer={setNewPlayer}
             handleAddPlayer={handleAddPlayer}
             handleRemovePlayer={handleRemovePlayer}
+            handleEditPlayer={handleEditPlayer}
             startGame={startGame}
             setupAttempted={setupAttempted}
             resetGame={resetGame}

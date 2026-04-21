@@ -1,5 +1,5 @@
 import React from "react";
-import { Settings, UserPlus, Play } from "lucide-react";
+import { Settings, UserPlus, Play, Pencil } from "lucide-react";
 
 export default function SetupView({
   user,
@@ -10,10 +10,27 @@ export default function SetupView({
   setNewPlayer,
   handleAddPlayer,
   handleRemovePlayer,
+  handleEditPlayer,
   startGame,
   setupAttempted,
   resetGame,
 }) {
+  const capitalizeWords = (str) => {
+    return str
+      .split(" ")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+  };
+
+  const onEditClick = (p) => {
+    const newName = window.prompt(`Edit name for jersey #${p.jersey}:`, p.name);
+    if (newName !== null && newName.trim() !== "") {
+      // Also protect the edit popup from numbers!
+      const lettersOnly = newName.replace(/[^a-zA-Z\s]/g, "");
+      handleEditPlayer(p.id, capitalizeWords(lettersOnly.trim()));
+    }
+  };
+
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       {/* SECTION 1: TEAM INFORMATION */}
@@ -40,7 +57,10 @@ export default function SetupView({
               placeholder="e.g. Lakers"
               value={teamMeta.teamName}
               onChange={(e) =>
-                setTeamMeta({ ...teamMeta, teamName: e.target.value })
+                setTeamMeta({
+                  ...teamMeta,
+                  teamName: capitalizeWords(e.target.value),
+                })
               }
             />
           </div>
@@ -62,7 +82,10 @@ export default function SetupView({
               placeholder="e.g. Bulls"
               value={teamMeta.opponent}
               onChange={(e) =>
-                setTeamMeta({ ...teamMeta, opponent: e.target.value })
+                setTeamMeta({
+                  ...teamMeta,
+                  opponent: capitalizeWords(e.target.value),
+                })
               }
             />
           </div>
@@ -85,20 +108,29 @@ export default function SetupView({
           <input
             required
             className="border p-2.5 rounded-lg flex-1 min-w-0 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
-            placeholder="Player Name"
+            placeholder="Player Name (or skip for now)"
             value={newPlayer.name}
-            onChange={(e) =>
-              setNewPlayer({ ...newPlayer, name: e.target.value })
-            }
+            onChange={(e) => {
+              // 1. Strip out anything that is NOT a letter or a space
+              const lettersOnly = e.target.value.replace(/[^a-zA-Z\s]/g, "");
+              // 2. Capitalize and save
+              setNewPlayer({
+                ...newPlayer,
+                name: capitalizeWords(lettersOnly),
+              });
+            }}
           />
           <input
             required
+            inputMode="numeric" // Forces the number pad to open on smartphones!
             className="border p-2.5 rounded-lg sm:w-28 min-w-0 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
             placeholder="Jersey #"
             value={newPlayer.jersey}
-            onChange={(e) =>
-              setNewPlayer({ ...newPlayer, jersey: e.target.value })
-            }
+            onChange={(e) => {
+              // Strip out anything that is NOT a number (0-9)
+              const numbersOnly = e.target.value.replace(/[^0-9]/g, "");
+              setNewPlayer({ ...newPlayer, jersey: numbersOnly });
+            }}
           />
           <button
             type="submit"
@@ -121,8 +153,23 @@ export default function SetupView({
                 className="bg-slate-100 pl-3 pr-1 py-1.5 rounded-full text-sm font-bold flex items-center gap-2 border border-slate-200 group hover:border-slate-300 transition-all shadow-sm"
               >
                 <span className="text-blue-700">#{p.jersey}</span>
-                <span className="text-slate-700">{p.name}</span>
+                <span className="text-slate-700 truncate max-w-[100px] sm:max-w-[150px]">
+                  {p.name}
+                </span>
+
+                {/* Edit Button */}
                 <button
+                  type="button"
+                  onClick={() => onEditClick(p)}
+                  className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-200 text-blue-600 hover:bg-blue-500 hover:text-white transition-colors ml-1"
+                  title="Edit Player Name"
+                >
+                  <Pencil size={12} />
+                </button>
+
+                {/* Remove Button */}
+                <button
+                  type="button"
                   onClick={() => handleRemovePlayer(p.id)}
                   className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-200 text-slate-500 hover:bg-red-500 hover:text-white transition-colors"
                   title="Remove Player"
@@ -143,7 +190,7 @@ export default function SetupView({
         <Play fill="currentColor" size={20} /> Start Game Tracking
       </button>
 
-      {/* NEW: Reset Data Button */}
+      {/* Reset Data Button */}
       <div className="flex justify-center mt-4">
         <button
           onClick={resetGame}
