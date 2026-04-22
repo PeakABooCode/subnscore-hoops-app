@@ -232,16 +232,23 @@ export default function App() {
         showNotification("Welcome back, Coach!");
       } else {
         const res = await axios.post("/api/auth/register", authForm);
-        setUser(res.data.user);
-        setView("SETUP");
-        showNotification("Account created successfully!");
+        setAuthMode("login");
+        showNotification(
+          "Account created! Please sign in with your credentials.",
+        );
       }
     } catch (err) {
       console.error("Full Auth Error Response:", err.response);
-      const errorMsg =
-        err.response?.data?.error ||
-        err.response?.data?.message ||
-        "Authentication failed.";
+
+      // Check if response is HTML (server crash) or JSON (validation error)
+      let errorMsg = "Authentication failed.";
+      if (err.response?.data && typeof err.response.data === "object") {
+        errorMsg =
+          err.response.data.error || err.response.data.message || errorMsg;
+      } else if (err.response?.status === 500) {
+        errorMsg = "Server crash detected. Please check server logs.";
+      }
+
       showNotification(errorMsg);
     } finally {
       setIsAuthLoading(false);
@@ -268,7 +275,8 @@ export default function App() {
       setView("AUTH");
       // Complete Refresh on Logout
       resetGame(true);
-      showNotification("Logged out successfully. Session cleared.");
+      //Logged out and session cleared
+      showNotification("Logged out successfully.");
     } catch (err) {
       showNotification("Error logging out.");
     }

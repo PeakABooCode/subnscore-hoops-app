@@ -9,6 +9,14 @@ const router = express.Router();
 router.post("/register", async (req, res) => {
   console.log(`📝 Attempting registration for: ${req.body.email}`);
   const { name, email, password } = req.body;
+
+  // 1. Input Validation
+  if (!name || !email || !password) {
+    return res
+      .status(400)
+      .json({ error: "Name, email, and password are required." });
+  }
+
   try {
     // Hash the password (salt rounds = 10)
     const salt = await bcrypt.genSalt(10);
@@ -20,18 +28,21 @@ router.post("/register", async (req, res) => {
       [name, email, passwordHash],
     );
 
-    // Automatically log them in after registering
-    req.login(newUser.rows[0], (err) => {
-      if (err) throw err;
-      res.json({ message: "Registered successfully", user: newUser.rows[0] });
-    });
+    // 2. Safe data access
+    const createdUser = newUser.rows[0];
+    if (!createdUser) {
+      throw new Error("User creation failed: No rows returned from database.");
+    }
+
+    console.log(`✅ User created: ${createdUser.id}`);
+    res.json({ message: "Registered successfully. Please log in." });
   } catch (err) {
-    // PostgreSQL code for "Unique Violation"
+    console.error("❌ Registration Error:", err);
+    // PostgreSQL code '23505' for "Unique Violation"
     if (err.code === "23505")
       return res.status(400).json({ error: "Email already exists" });
     res.status(500).json({ error: "Server error" });
   }
-  console.log(`✅ User created and logged in: ${newUser.rows[0].id}`);
 });
 
 // --- LOGIN ROUTE ---

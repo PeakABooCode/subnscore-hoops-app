@@ -22,6 +22,13 @@ passport.use(
 
         const user = result.rows[0];
 
+        // Handle users registered via Google who don't have a local password
+        if (!user.password_hash) {
+          return done(null, false, {
+            message: "This account uses Google Login.",
+          });
+        }
+
         // Compare hashed password
         const isValid = await bcrypt.compare(password, user.password_hash);
         if (!isValid) {
@@ -81,8 +88,14 @@ passport.deserializeUser(async (id, done) => {
       "SELECT id, name, email FROM users WHERE id = $1",
       [id],
     );
+
+    if (result.rows.length === 0) {
+      return done(null, false); // Signify user not found to clear session
+    }
+
     done(null, result.rows[0]);
   } catch (err) {
+    console.error("❌ Passport Deserialization Error:", err);
     done(err);
   }
 });
