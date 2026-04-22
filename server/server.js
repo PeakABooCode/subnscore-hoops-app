@@ -17,17 +17,6 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// ... other middleware ...
-
-// Serve static files from the React app
-app.use(express.static(path.join(__dirname, "../client/dist")));
-
-// The "catchall" handler: for any request that doesn't
-// match one above, send back React's index.html file.
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "../client/dist/index.html"));
-});
-
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -66,6 +55,15 @@ app.use(passport.session());
 // --- ROUTES ---
 app.use("/api/auth", authRoutes);
 app.use("/api/games", gameRoutes);
+
+// --- PRODUCTION STATIC ASSETS ---
+// Serve static files from the React app
+app.use(express.static(path.join(__dirname, "../client/dist")));
+
+// The "catchall" handler: for any request that doesn't match an API route
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "../client/dist/index.html"));
+});
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
