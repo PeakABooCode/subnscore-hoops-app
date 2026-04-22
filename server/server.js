@@ -85,7 +85,7 @@ app.use("/api/games", gameRoutes);
 
 // --- PRODUCTION STATIC ASSETS ---
 // Use process.cwd() to anchor paths to the project root on Render
-const clientBuildPath = path.resolve(process.cwd(), "client", "dist");
+const clientBuildPath = path.join(__dirname, "../client/dist");
 
 console.log(`Folder for static assets: ${clientBuildPath}`);
 
