@@ -10,6 +10,7 @@ export const saveGameSession = async (req, res) => {
     teamMeta,
     roster,
     playerStats,
+    calculatedQuarterStats,
     actionHistory,
     timeouts,
     finalScoreUs,
@@ -65,6 +66,23 @@ export const saveGameSession = async (req, res) => {
           stats.turnovers || 0,
           player.calculatedMins || "0:00", // Data from App.jsx
           player.rawSeconds || 0,
+        ],
+      );
+    }
+
+    // 4. Save Summarized Quarter Stats
+    for (const qStat of calculatedQuarterStats) {
+      await pool.query(
+        `INSERT INTO player_quarter_stats (game_id, player_id, quarter, points, fouls, turnovers, seconds_played) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          gameId,
+          playerMap[qStat.playerId],
+          qStat.quarter,
+          qStat.points,
+          qStat.fouls,
+          qStat.turnovers,
+          qStat.secondsPlayed,
         ],
       );
     }
@@ -155,11 +173,16 @@ export const getGameDetails = async (req, res) => {
       `SELECT * FROM action_logs WHERE game_id = $1 ORDER BY id ASC`,
       [id],
     );
+    const qStats = await pool.query(
+      `SELECT * FROM player_quarter_stats WHERE game_id = $1`,
+      [id],
+    );
 
     res.json({
       game: gameMeta.rows[0],
       stats: stats.rows,
       logs: logs.rows,
+      quarterStats: qStats.rows,
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to load game details" });

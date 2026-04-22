@@ -121,36 +121,46 @@ export default function App() {
 
   // Auto-Savers
   useEffect(() => {
+    if (!isLoaded.current) return;
     localStorage.setItem("subnscore_teamMeta", JSON.stringify(teamMeta));
   }, [teamMeta]);
   useEffect(() => {
+    if (!isLoaded.current) return;
     localStorage.setItem("subnscore_roster", JSON.stringify(roster));
   }, [roster]);
   useEffect(() => {
+    if (!isLoaded.current) return;
     localStorage.setItem("subnscore_playerStats", JSON.stringify(playerStats));
   }, [playerStats]);
   useEffect(() => {
+    if (!isLoaded.current) return;
     localStorage.setItem("subnscore_view", view);
   }, [view]);
   useEffect(() => {
+    if (!isLoaded.current) return;
     localStorage.setItem(
       "subnscore_actionHistory",
       JSON.stringify(actionHistory),
     );
   }, [actionHistory]);
   useEffect(() => {
+    if (!isLoaded.current) return;
     localStorage.setItem("subnscore_quarter", JSON.stringify(quarter));
   }, [quarter]);
   useEffect(() => {
+    if (!isLoaded.current) return;
     localStorage.setItem("subnscore_court", JSON.stringify(court));
   }, [court]);
   useEffect(() => {
+    if (!isLoaded.current) return;
     localStorage.setItem("subnscore_stints", JSON.stringify(stints));
   }, [stints]);
   useEffect(() => {
+    if (!isLoaded.current) return;
     localStorage.setItem("subnscore_teamFouls", JSON.stringify(teamFouls));
   }, [teamFouls]);
   useEffect(() => {
+    if (!isLoaded.current) return;
     localStorage.setItem("subnscore_timeouts", JSON.stringify(timeouts));
   }, [timeouts]);
 
@@ -518,9 +528,61 @@ export default function App() {
         };
       });
 
+      // Calculate detailed stats for EVERY quarter to be saved
+      const calculatedQuarterStats = [];
+      for (let q = 1; q <= quarter; q++) {
+        roster.forEach((p) => {
+          let qSecs = 0;
+          stints
+            .filter((s) => s.playerId === p.id && s.quarter === q)
+            .forEach((s) => {
+              const out =
+                s.clockOut !== null
+                  ? s.clockOut
+                  : s.quarter === quarter
+                    ? clock
+                    : 0;
+              qSecs += s.clockIn - out;
+            });
+
+          const qPts = actionHistory
+            .filter(
+              (a) =>
+                a.playerId === p.id && a.quarter === q && a.type === "score",
+            )
+            .reduce((sum, a) => sum + a.amount, 0);
+          const qFls = actionHistory
+            .filter(
+              (a) =>
+                a.playerId === p.id && a.quarter === q && a.type === "fouls",
+            )
+            .reduce((sum, a) => sum + a.amount, 0);
+          const qTOs = actionHistory
+            .filter(
+              (a) =>
+                a.playerId === p.id &&
+                a.quarter === q &&
+                a.type === "turnovers",
+            )
+            .reduce((sum, a) => sum + a.amount, 0);
+
+          if (qSecs > 0 || qPts > 0 || qFls > 0 || qTOs > 0) {
+            calculatedQuarterStats.push({
+              playerId: p.id,
+              quarter: q,
+              points: qPts,
+              fouls: qFls,
+              turnovers: qTOs,
+              secondsPlayed: qSecs,
+            });
+          }
+        });
+      }
+
       const payload = {
         teamMeta,
         roster: finalRosterWithMins,
+        calculatedQuarterStats,
         playerStats,
         actionHistory,
         timeouts,
@@ -572,6 +634,7 @@ export default function App() {
         roster: historicalRoster,
         stats: historicalStats,
         actions: historicalActions,
+        quarterStats: res.data.quarterStats || [],
         quarter: Math.max(...logs.map((l) => l.quarter), 4),
       });
       setView("STATS");
@@ -739,6 +802,7 @@ export default function App() {
             resetGame={() => (historyData ? setView("HISTORY") : resetGame())}
             handleSaveGame={handleSaveGame}
             isHistory={!!historyData}
+            historyQuarterStats={historyData?.quarterStats}
           />
         )}
       </main>
