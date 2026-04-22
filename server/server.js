@@ -62,7 +62,7 @@ const clientBuildPath = path.join(__dirname, "../client/dist");
 app.use(express.static(clientBuildPath));
 
 // The "catchall" handler: for any request that doesn't match an API route
-app.get("/*", (req, res) => {
+app.get("*all", (req, res) => {
   res.sendFile(path.join(clientBuildPath, "index.html"));
 });
 
