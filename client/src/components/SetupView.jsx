@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef } from "react";
 import {
   Settings,
   UserPlus,
@@ -34,6 +34,15 @@ export default function SetupView({
     if (newName !== null && newName.trim() !== "") {
       const lettersOnly = newName.replace(/[^a-zA-Z\s]/g, "");
       handleEditPlayer(p.id, capitalizeWords(lettersOnly.trim()));
+    }
+  };
+
+  const nameInputRef = useRef(null);
+
+  const onAddPlayerSubmit = (e) => {
+    handleAddPlayer(e);
+    if (nameInputRef.current) {
+      nameInputRef.current.focus();
     }
   };
 
@@ -110,7 +119,7 @@ export default function SetupView({
                   ? "border-red-500 bg-red-50 ring-1 ring-red-200"
                   : "focus:border-blue-500 focus:ring-2 focus:ring-blue-100 border-slate-200"
               }`}
-              placeholder="e.g. City League"
+              placeholder="e.g. PBAQ"
               value={teamMeta.league}
               onChange={(e) =>
                 setTeamMeta({
@@ -135,7 +144,7 @@ export default function SetupView({
                   ? "border-red-500 bg-red-50 ring-1 ring-red-200"
                   : "focus:border-blue-500 focus:ring-2 focus:ring-blue-100 border-slate-200"
               }`}
-              placeholder="e.g. Fall 2026"
+              placeholder="e.g. 1, 2, 3, 4, etc."
               value={teamMeta.season}
               onChange={(e) =>
                 setTeamMeta({
@@ -158,11 +167,12 @@ export default function SetupView({
         </h2>
 
         <form
-          onSubmit={handleAddPlayer}
+          onSubmit={onAddPlayerSubmit}
           className="flex flex-col sm:flex-row gap-3"
         >
           <input
             required
+            ref={nameInputRef}
             className="border border-slate-200 p-2.5 rounded-lg flex-1 min-w-0 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
             placeholder="Player Name"
             value={newPlayer.name}

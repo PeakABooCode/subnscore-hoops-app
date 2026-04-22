@@ -7,6 +7,7 @@ import {
   AlertCircle,
   Trophy,
   History,
+  Clock,
 } from "lucide-react";
 import { formatTime } from "../utils/helpers";
 
@@ -27,6 +28,7 @@ export default function LiveView({
   teamMeta,
   handleSwap,
   pendingSwapId,
+  playerTimes,
 }) {
   const teamTotalScore = Object.values(playerStats).reduce(
     (acc, curr) => acc + (curr.score || 0),
@@ -71,6 +73,7 @@ export default function LiveView({
           {/* Main Controls */}
           <div className="flex gap-2">
             <button
+              title="Start/Pause"
               onClick={() => setIsRunning(!isRunning)}
               className={`p-3 md:p-5 rounded-full transition-all shadow-lg active:scale-95 ${
                 isRunning ? "bg-red-500" : "bg-emerald-500"
@@ -83,6 +86,7 @@ export default function LiveView({
               )}
             </button>
             <button
+              title="Next Quarter"
               onClick={advanceQuarter}
               className="hidden md:flex p-5 bg-slate-700 hover:bg-slate-600 rounded-full border border-slate-600 active:scale-95"
             >
@@ -116,6 +120,7 @@ export default function LiveView({
               turnovers: 0,
             };
             const isSelected = pendingSwapId === id;
+            const timePlayed = playerTimes?.[id] || 0;
 
             return (
               <div
@@ -130,9 +135,17 @@ export default function LiveView({
                 {/* Info Row */}
                 <div className="flex justify-between items-center">
                   <div className="min-w-0">
-                    <span className="font-black text-slate-800 text-lg md:text-xl truncate block">
-                      #{p.jersey} {p.name}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-black text-slate-800 text-lg md:text-xl truncate block">
+                        #{p.jersey} {p.name}
+                      </span>
+                      <div className="flex items-center gap-1 bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100 shadow-sm">
+                        <Clock size={12} className="shrink-0" />
+                        <span className="text-[12px] font-bold tabular-nums leading-none">
+                          {formatTime(timePlayed)}
+                        </span>
+                      </div>
+                    </div>
                     <span className="text-[10px] font-bold text-slate-400 uppercase">
                       {isSelected
                         ? "Select substitute from bench"
@@ -225,6 +238,7 @@ export default function LiveView({
                     fouls: 0,
                     turnovers: 0,
                   };
+                  const timePlayed = playerTimes?.[p.id] || 0;
                   return (
                     <button
                       key={p.id}
@@ -239,7 +253,13 @@ export default function LiveView({
                       <div className="font-black text-slate-800 text-sm truncate">
                         #{p.jersey} {p.name}
                       </div>
-                      <div className="flex justify-between mt-2 border-t pt-2 border-slate-100">
+                      <div className="grid grid-cols-2 gap-y-1 mt-2 border-t pt-2 border-slate-100">
+                        <div className="flex items-center gap-1 text-[10px] font-bold text-blue-500 uppercase">
+                          <Clock size={10} className="shrink-0" />
+                          <span className="tabular-nums">
+                            {formatTime(timePlayed)}
+                          </span>
+                        </div>
                         <span className="text-[10px] font-bold text-slate-500">
                           Pts: {stats.score}
                         </span>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { Activity, LogOut, History as HistoryIcon } from "lucide-react";
 
@@ -18,9 +18,18 @@ export default function App() {
 
   // --- Global App State ---
   const [user, setUser] = useState(null);
-  const [view, setView] = useState("AUTH"); // AUTH, SETUP, LIVE, STATS, HISTORY
+  const [view, setView] = useState(() => {
+    return localStorage.getItem("subnscore_view") || "AUTH";
+  }); // AUTH, SETUP, LIVE, STATS, HISTORY
   const [notification, setNotification] = useState(null);
-  const [actionHistory, setActionHistory] = useState([]);
+  const [actionHistory, setActionHistory] = useState(() => {
+    try {
+      const saved = localStorage.getItem("subnscore_actionHistory");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [pendingSwapId, setPendingSwapId] = useState(null);
 
   // State to hold a loaded historical game
@@ -67,11 +76,47 @@ export default function App() {
   });
 
   const [newPlayer, setNewPlayer] = useState({ name: "", jersey: "" });
-  const [quarter, setQuarter] = useState(1);
-  const [court, setCourt] = useState([]);
-  const [stints, setStints] = useState([]);
-  const [teamFouls, setTeamFouls] = useState({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
-  const [timeouts, setTimeouts] = useState([]);
+  const [quarter, setQuarter] = useState(() => {
+    const saved = localStorage.getItem("subnscore_quarter");
+    return saved ? JSON.parse(saved) : 1;
+  });
+
+  const [court, setCourt] = useState(() => {
+    try {
+      const saved = localStorage.getItem("subnscore_court");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [stints, setStints] = useState(() => {
+    try {
+      const saved = localStorage.getItem("subnscore_stints");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [teamFouls, setTeamFouls] = useState(() => {
+    try {
+      const saved = localStorage.getItem("subnscore_teamFouls");
+      return saved ? JSON.parse(saved) : { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    } catch {
+      return { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    }
+  });
+
+  const [timeouts, setTimeouts] = useState(() => {
+    try {
+      const saved = localStorage.getItem("subnscore_timeouts");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
   const [setupAttempted, setSetupAttempted] = useState(false);
 
   // Auto-Savers
@@ -84,6 +129,43 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("subnscore_playerStats", JSON.stringify(playerStats));
   }, [playerStats]);
+  useEffect(() => {
+    localStorage.setItem("subnscore_view", view);
+  }, [view]);
+  useEffect(() => {
+    localStorage.setItem(
+      "subnscore_actionHistory",
+      JSON.stringify(actionHistory),
+    );
+  }, [actionHistory]);
+  useEffect(() => {
+    localStorage.setItem("subnscore_quarter", JSON.stringify(quarter));
+  }, [quarter]);
+  useEffect(() => {
+    localStorage.setItem("subnscore_court", JSON.stringify(court));
+  }, [court]);
+  useEffect(() => {
+    localStorage.setItem("subnscore_stints", JSON.stringify(stints));
+  }, [stints]);
+  useEffect(() => {
+    localStorage.setItem("subnscore_teamFouls", JSON.stringify(teamFouls));
+  }, [teamFouls]);
+  useEffect(() => {
+    localStorage.setItem("subnscore_timeouts", JSON.stringify(timeouts));
+  }, [timeouts]);
+
+  // --- Clock & Timer Persistence Logic ---
+  const isLoaded = useRef(false);
+
+  useEffect(() => {
+    if (!isLoaded.current) return;
+    localStorage.setItem("subnscore_clock", JSON.stringify(clock));
+  }, [clock]);
+
+  useEffect(() => {
+    if (!isLoaded.current) return;
+    localStorage.setItem("subnscore_isRunning", JSON.stringify(isRunning));
+  }, [isRunning]);
 
   // Session Check
   useEffect(() => {
@@ -91,14 +173,33 @@ export default function App() {
       try {
         const res = await axios.get("/api/auth/me");
         setUser(res.data.user);
-        setView("SETUP");
+        // Restore the view from localStorage if we are already logged in
+        const savedView = localStorage.getItem("subnscore_view");
+        if (savedView && savedView !== "AUTH") {
+          setView(savedView);
+        } else {
+          setView("SETUP");
+        }
       } catch (err) {
         setUser(null);
+        setView("AUTH");
       } finally {
         setIsAuthLoading(false);
       }
     };
     checkSession();
+
+    // 1. Restore clock and timer state from localStorage on mount
+    const savedClock = localStorage.getItem("subnscore_clock");
+    const savedRunning = localStorage.getItem("subnscore_isRunning");
+
+    if (savedClock) setClock(JSON.parse(savedClock));
+    if (savedRunning) setIsRunning(JSON.parse(savedRunning));
+
+    // 2. Delay marking as loaded slightly to allow states to settle
+    setTimeout(() => {
+      isLoaded.current = true;
+    }, 100);
   }, []);
 
   const showNotification = (msg) => {
@@ -143,6 +244,15 @@ export default function App() {
       localStorage.removeItem("subnscore_teamMeta");
       localStorage.removeItem("subnscore_roster");
       localStorage.removeItem("subnscore_playerStats");
+      localStorage.removeItem("subnscore_view");
+      localStorage.removeItem("subnscore_actionHistory");
+      localStorage.removeItem("subnscore_quarter");
+      localStorage.removeItem("subnscore_court");
+      localStorage.removeItem("subnscore_stints");
+      localStorage.removeItem("subnscore_teamFouls");
+      localStorage.removeItem("subnscore_timeouts");
+      localStorage.removeItem("subnscore_clock");
+      localStorage.removeItem("subnscore_isRunning");
 
       setUser(null);
       setView("AUTH");
@@ -223,6 +333,17 @@ export default function App() {
     setTeamFouls({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
     setTimeouts([]);
     setPendingSwapId(null);
+
+    localStorage.removeItem("subnscore_actionHistory");
+    localStorage.removeItem("subnscore_playerStats");
+    localStorage.removeItem("subnscore_view");
+    localStorage.removeItem("subnscore_quarter");
+    localStorage.removeItem("subnscore_court");
+    localStorage.removeItem("subnscore_stints");
+    localStorage.removeItem("subnscore_teamFouls");
+    localStorage.removeItem("subnscore_timeouts");
+    localStorage.removeItem("subnscore_clock");
+    localStorage.removeItem("subnscore_isRunning");
 
     // 3. Go back to Setup View
     setView("SETUP");
@@ -459,6 +580,25 @@ export default function App() {
     }
   };
 
+  // Calculate accumulated time for each player for real-time display
+  const playerTimes = roster.reduce((acc, player) => {
+    let totalSeconds = 0;
+    stints
+      .filter((s) => s.playerId === player.id)
+      .forEach((s) => {
+        // If stint is active (clockOut is null), calculate up to current clock if in current quarter
+        const out =
+          s.clockOut !== null
+            ? s.clockOut
+            : s.quarter === quarter
+              ? clock
+              : s.clockIn; // Should not happen with advanceQuarter logic
+        totalSeconds += s.clockIn - out;
+      });
+    acc[player.id] = totalSeconds;
+    return acc;
+  }, {});
+
   if (isAuthLoading)
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 font-bold">
@@ -583,6 +723,7 @@ export default function App() {
             teamMeta={teamMeta}
             handleSwap={handleSwap}
             pendingSwapId={pendingSwapId}
+            playerTimes={playerTimes}
           />
         )}
 

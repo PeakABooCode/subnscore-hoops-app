@@ -1,6 +1,14 @@
-node_modules/
-.env
+# Folder
 server/SubNScore OAuth Details/
+
+# Context folder
+.context
+
+# Cursor Rules
+.cursorrules
+
+# Markdown files and folders
+*.md
 
 ###PRE-BUILD TEMPLATE FROM GITHUB GITIGNORE NODE.GITIGNORE###
 # Logs

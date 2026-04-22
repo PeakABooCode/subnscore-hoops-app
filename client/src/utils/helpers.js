@@ -1,13 +1,14 @@
-//For helper functions
-
-// --- Constants & Helpers ---
-export const QUARTER_MINUTES = 10;
-export const QUARTER_SECONDS = QUARTER_MINUTES * 60;
+export const QUARTER_SECONDS = 600; // 10 minutes per quarter
 
 export const formatTime = (totalSeconds) => {
-  const m = Math.floor(totalSeconds / 60)
-    .toString()
-    .padStart(2, "0");
-  const s = (totalSeconds % 60).toString().padStart(2, "0");
-  return `${m}:${s}`;
+  if (
+    typeof totalSeconds !== "number" ||
+    isNaN(totalSeconds) ||
+    totalSeconds < 0
+  ) {
+    return "0:00"; // Ensure a default string for invalid input
+  }
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 };

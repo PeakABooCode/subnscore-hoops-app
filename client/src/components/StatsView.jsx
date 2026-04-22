@@ -45,13 +45,16 @@ export default function StatsView({
       stints
         .filter((s) => s.playerId === pId)
         .forEach((s) => {
-          const out =
-            s.clockOut !== null
-              ? s.clockOut
-              : s.quarter === quarter
-                ? clock
-                : 0;
-          total += s.clockIn - out;
+          // If clockOut is null, the player is still active in a quarter
+          if (s.clockOut !== null) {
+            total += s.clockIn - s.clockOut;
+          } else if (s.quarter === quarter) {
+            // Currently on court in the active quarter
+            total += s.clockIn - clock;
+          } else if (s.quarter < quarter) {
+            // Played in a previous quarter that didn't record a clockOut (fallback)
+            total += s.clockIn;
+          }
         });
       return formatTime(total);
     }
@@ -86,6 +89,7 @@ export default function StatsView({
     let qPts = 0;
     let qFls = 0;
     let qTOs = 0;
+    let qSecs = 0;
 
     actionHistory.forEach((action) => {
       if (action.playerId === playerId && action.quarter === qtr) {
@@ -94,7 +98,23 @@ export default function StatsView({
         if (action.type === "turnovers") qTOs += action.amount;
       }
     });
-    return { qPts, qFls, qTOs };
+
+    // Calculate playing time for this specific player in this specific quarter
+    if (!isHistory && stints) {
+      stints
+        .filter((s) => s.playerId === playerId && s.quarter === qtr)
+        .forEach((s) => {
+          if (s.clockOut !== null) {
+            qSecs += s.clockIn - s.clockOut;
+          } else if (s.quarter === quarter) {
+            qSecs += s.clockIn - clock;
+          } else if (s.quarter < quarter) {
+            qSecs += s.clockIn;
+          }
+        });
+    }
+
+    return { qPts, qFls, qTOs, qTime: formatTime(qSecs) };
   };
 
   const onSaveClick = async () => {
@@ -118,7 +138,7 @@ export default function StatsView({
           <p className="text-xs md:text-sm text-slate-400 font-bold uppercase tracking-widest mt-1 flex items-center justify-center md:justify-start gap-2">
             <span>{teamMeta?.league || "General League"}</span>
             <span className="text-slate-600">•</span>
-            <span>{teamMeta?.season || "Unknown Season"}</span>
+            <span>{"Season " + teamMeta?.season || "Unknown Season"}</span>
           </p>
         </div>
 
@@ -293,6 +313,14 @@ export default function StatsView({
                             </div>
                             <div className="flex items-center gap-2 border-l border-slate-200 pl-3 shrink-0">
                               <div className="flex flex-col items-center justify-center">
+                                <span className="text-[8px] font-black text-slate-400 uppercase leading-none">
+                                  Min
+                                </span>
+                                <span className="text-sm font-black text-blue-600 leading-none mt-0.5">
+                                  {qStats.qTime}
+                                </span>
+                              </div>
+                              <div className="flex flex-col items-center justify-center ml-1">
                                 <span className="text-[8px] font-black text-slate-400 uppercase leading-none">
                                   Pts
                                 </span>
