@@ -10,6 +10,25 @@ import "./config/passport.js"; // Imports our passport config
 import authRoutes from "./routes/authRoutes.js"; // Imports our routes
 import gameRoutes from "./routes/gameRoutes.js";
 
+/**PREPARING BACKEND FOR PRODUCTION  */
+// Add this to your main server.js file
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// ... other middleware ...
+
+// Serve static files from the React app
+app.use(express.static(path.join(__dirname, "../client/dist")));
+
+// The "catchall" handler: for any request that doesn't
+// match one above, send back React's index.html file.
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "../client/dist/index.html"));
+});
+
+//-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 const app = express();
 const PORT = process.env.PORT || 5000;
 

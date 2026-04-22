@@ -80,11 +80,13 @@ router.get(
 router.get(
   "/google/callback",
   passport.authenticate("google", {
-    failureRedirect: "http://localhost:5173/login",
+    //failureRedirect: "http://localhost:5173/login",
+    failureRedirect: "/login",
   }),
   (req, res) => {
     // Successful login -> Redirect back to your React app
-    res.redirect("http://localhost:5173/");
+    // res.redirect("http://localhost:5173/");
+    res.redirect("/");
   },
 );
 
