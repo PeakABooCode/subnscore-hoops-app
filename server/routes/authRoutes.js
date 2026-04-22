@@ -2,11 +2,32 @@ import express from "express";
 import bcrypt from "bcrypt";
 import passport from "passport";
 import pool from "../config/db.js";
+import rateLimit from "express-rate-limit";
 
 const router = express.Router();
 
+// --- RATE LIMITING ---
+// Limit to 5 requests per 1 minute for security-sensitive endpoints
+const authLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 5, // Limit each IP to 5 requests per windowMs
+  message: {
+    error: "Too many attempts from this IP, please try again after a minute.",
+  },
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
+
+// Standard limiter for less sensitive routes (30 requests per minute)
+const standardLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // --- REGISTER ROUTE ---
-router.post("/register", async (req, res) => {
+router.post("/register", authLimiter, async (req, res) => {
   console.log(`📝 Attempting registration for: ${req.body.email}`);
   const { name, email, password } = req.body;
 
@@ -46,11 +67,16 @@ router.post("/register", async (req, res) => {
 });
 
 // --- LOGIN ROUTE ---
-router.post("/login", passport.authenticate("local"), (req, res) => {
-  // If passport fails, it automatically sends a 401 error.
-  // If it succeeds, it reaches here.
-  res.json({ message: "Logged in successfully", user: req.user });
-});
+router.post(
+  "/login",
+  authLimiter,
+  passport.authenticate("local"),
+  (req, res) => {
+    // If passport fails, it automatically sends a 401 error.
+    // If it succeeds, it reaches here.
+    res.json({ message: "Logged in successfully", user: req.user });
+  },
+);
 
 // --- LOGOUT ROUTE ---
 router.post("/logout", (req, res, next) => {
@@ -61,7 +87,7 @@ router.post("/logout", (req, res, next) => {
 });
 
 // --- GET CURRENT USER (Session Check) ---
-router.get("/me", (req, res) => {
+router.get("/me", standardLimiter, (req, res) => {
   if (req.isAuthenticated()) {
     res.json({ user: req.user });
   } else {

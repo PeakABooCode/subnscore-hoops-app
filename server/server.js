@@ -6,6 +6,7 @@ import session from "express-session";
 import pgSession from "connect-pg-simple";
 import passport from "passport";
 import pool from "./config/db.js";
+import rateLimit from "express-rate-limit";
 import "./config/passport.js"; // Imports our passport config
 import authRoutes from "./routes/authRoutes.js"; // Imports our routes
 import gameRoutes from "./routes/gameRoutes.js";
@@ -21,6 +22,19 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Trust the proxy (Render) to get the correct client IP for rate limiting
+if (process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
+
+// --- GLOBAL RATE LIMITING ---
+// Safety net: 100 requests every 15 minutes per IP
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { error: "Too many requests from this IP, please try again later." },
+});
+
 app.use(express.json());
 app.use(
   cors({
@@ -28,6 +42,9 @@ app.use(
     credentials: true,
   }),
 );
+
+// Apply global limiter to all requests
+app.use(globalLimiter);
 
 // --- SESSION CONFIGURATION ---
 const PgSession = pgSession(session);
