@@ -38,7 +38,16 @@ const globalLimiter = rateLimit({
 app.use(express.json());
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    // Dynamically set origin based on environment or request origin
+    origin: (origin, callback) => {
+      const allowedOrigins = [process.env.CLIENT_URL, "http://localhost:5173"];
+      if (!origin || allowedOrigins.includes(origin)) {
+        // Allow requests with no origin (like Postman) or from allowed origins
+        callback(null, true);
+      } else {
+        callback(new Error(`Not allowed by CORS: ${origin}`));
+      }
+    },
     credentials: true,
   }),
 );
@@ -57,6 +66,7 @@ app.use(
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
+    proxy: true, // Required for secure cookies behind a proxy like Render
     cookie: {
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
       httpOnly: true,
