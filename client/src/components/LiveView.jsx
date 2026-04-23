@@ -45,7 +45,7 @@ export default function LiveView({
   return (
     <div className="max-w-6xl mx-auto space-y-4 pb-24 px-2 lg:px-6">
       {/* 1. ADAPTIVE HEADER (Scores & Clock) */}
-      <div className="bg-slate-900 text-white p-4 md:p-6 rounded-2xl shadow-xl border-b-4 border-amber-500 sticky top-16 z-30">
+      <div className="bg-slate-900 text-white p-4 md:p-6 rounded-2xl shadow-xl border-b-4 border-amber-500 sticky top-16 z-30 transition-all duration-300">
         <div className="flex flex-row justify-between items-center gap-2 md:gap-6">
           {/* Team Info */}
           <div className="flex flex-col min-w-0">
