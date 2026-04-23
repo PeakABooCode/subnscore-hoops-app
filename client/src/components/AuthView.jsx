@@ -303,7 +303,9 @@ export default function AuthView({
 
         <button
           onClick={() => {
-            const apiUrl = import.meta.env.VITE_API_URL || "";
+            // Use the absolute URL to your backend to avoid proxy issues during OAuth redirect
+            const apiUrl =
+              import.meta.env.VITE_API_URL || "http://localhost:5000";
             window.location.href = `${apiUrl}/api/auth/google`;
           }}
           className="w-full flex items-center justify-center gap-3 border-2 border-slate-100 py-3.5 rounded-xl font-black text-slate-700 hover:bg-slate-50 hover:border-slate-200 transition-all active:scale-[0.98]"

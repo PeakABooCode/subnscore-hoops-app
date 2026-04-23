@@ -126,13 +126,11 @@ router.get(
 router.get(
   "/google/callback",
   passport.authenticate("google", {
-    //failureRedirect: "http://localhost:5173/login",
-    failureRedirect: "/login",
+    failureRedirect: `${process.env.CLIENT_URL || ""}/login`,
   }),
   (req, res) => {
-    // Successful login -> Redirect back to your React app
-    // res.redirect("http://localhost:5173/");
-    res.redirect("/");
+    // Redirect back to the React app (port 5173) after successful login
+    res.redirect(process.env.CLIENT_URL || "/");
   },
 );
 

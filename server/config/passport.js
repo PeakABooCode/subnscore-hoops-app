@@ -68,24 +68,52 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: "/api/auth/google/callback",
+      // Use an absolute URL to ensure consistency between authorization and token exchange
+      callbackURL: "http://localhost:5000/api/auth/google/callback",
+      proxy: true,
     },
     async (accessToken, refreshToken, profile, done) => {
+      const email =
+        profile.emails && profile.emails[0] ? profile.emails[0].value : null;
+      const googleId = profile.id;
+      const name = profile.displayName;
+
       try {
-        // Check if user already exists
-        const result = await pool.query(
+        console.log(`Attempting Google login for: ${email || googleId}`);
+
+        // 1. Check if a user with this Google ID already exists
+        let { rows } = await pool.query(
           "SELECT * FROM users WHERE google_id = $1",
-          [profile.id],
+          [googleId],
         );
 
-        if (result.rows.length > 0) {
-          return done(null, result.rows[0]);
+        if (rows.length > 0) {
+          console.log(`User found by Google ID: ${googleId}`);
+          return done(null, rows[0]);
         }
 
-        // If not, create them
+        // 2. If not, check if a user with this EMAIL already exists (Account Linking)
+        if (email) {
+          const emailCheck = await pool.query(
+            "SELECT * FROM users WHERE email = $1",
+            [email],
+          );
+          if (emailCheck.rows.length > 0) {
+            // User registered with email/password previously. Link the Google account.
+            console.log(`User found by email, linking Google ID: ${email}`);
+            const updatedUser = await pool.query(
+              "UPDATE users SET google_id = $1 WHERE email = $2 RETURNING *",
+              [googleId, email],
+            );
+            return done(null, updatedUser.rows[0]);
+          }
+        }
+
+        // 3. If neither exists, create a new user
+        console.log(`Creating new user for Google ID: ${googleId}`);
         const newUser = await pool.query(
           "INSERT INTO users (name, email, google_id) VALUES ($1, $2, $3) RETURNING *",
-          [profile.displayName, profile.emails[0].value, profile.id],
+          [name, email, googleId],
         );
         return done(null, newUser.rows[0]);
       } catch (err) {
