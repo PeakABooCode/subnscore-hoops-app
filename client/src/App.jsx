@@ -1139,7 +1139,14 @@ export default function App() {
             teamMeta={historyData ? historyData.meta : teamMeta}
             quarter={historyData ? historyData.quarter : quarter}
             actionHistory={historyData ? historyData.actions : actionHistory}
-            resetGame={() => (historyData ? setView("HISTORY") : resetGame())}
+            resetGame={() => {
+              if (historyData) {
+                setView("HISTORY");
+                setHistoryData(null);
+              } else {
+                resetGame();
+              }
+            }}
             triggerSaveGame={handleSaveGame}
             isHistory={!!historyData}
             historyQuarterStats={historyData?.quarterStats}
