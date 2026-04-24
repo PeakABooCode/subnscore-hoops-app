@@ -35,7 +35,26 @@ export default function App() {
   const [pendingSwapIds, setPendingSwapIds] = useState([]);
 
   // State to hold a loaded historical game
-  const [historyData, setHistoryData] = useState(null);
+  const [historyData, setHistoryData] = useState(() => {
+    try {
+      const saved = localStorage.getItem("subnscore_historyData");
+      if (!saved) return null;
+      const data = JSON.parse(saved);
+      // Map keys back to original names (Hydration)
+      if (data.actions) {
+        data.actions = data.actions.map((a) => ({
+          playerId: a.p,
+          type: a.t,
+          amount: a.a,
+          quarter: a.q,
+          clock: a.c,
+        }));
+      }
+      return data;
+    } catch {
+      return null;
+    }
+  });
 
   // --- Auth State ---
   const [authMode, setAuthMode] = useState("login");
@@ -185,6 +204,28 @@ export default function App() {
     if (!isLoaded.current) return;
     localStorage.setItem("subnscore_timeouts", JSON.stringify(timeouts));
   }, [timeouts]);
+  useEffect(() => {
+    if (!isLoaded.current) return;
+    if (historyData) {
+      // Map keys to short names to save space (Dehydration)
+      const optimizedData = {
+        ...historyData,
+        actions: historyData.actions.map((a) => ({
+          p: a.playerId,
+          t: a.type,
+          a: a.amount,
+          q: a.quarter,
+          c: a.clock,
+        })),
+      };
+      localStorage.setItem(
+        "subnscore_historyData",
+        JSON.stringify(optimizedData),
+      );
+    } else {
+      localStorage.removeItem("subnscore_historyData");
+    }
+  }, [historyData]);
 
   // --- Clock & Timer Persistence Logic ---
   const isLoaded = useRef(false);
@@ -367,6 +408,7 @@ export default function App() {
       localStorage.removeItem("subnscore_timeouts");
       localStorage.removeItem("subnscore_clock");
       localStorage.removeItem("subnscore_isRunning");
+      localStorage.removeItem("subnscore_historyData");
 
       setUser(null);
       setView("AUTH");
@@ -634,6 +676,7 @@ export default function App() {
     localStorage.removeItem("subnscore_timeouts");
     localStorage.removeItem("subnscore_clock");
     localStorage.removeItem("subnscore_isRunning");
+    localStorage.removeItem("subnscore_historyData");
 
     // 3. Go back to Setup View
     setView("SETUP");
