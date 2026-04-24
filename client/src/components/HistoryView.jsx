@@ -8,6 +8,7 @@ import {
   Trash2,
   Search,
   X,
+  Download,
 } from "lucide-react";
 import ConfirmationModal from "./ConfirmationModal";
 
@@ -74,6 +75,37 @@ export default function HistoryView({ onViewGame }) {
     return matchesSearch && matchesDate;
   });
 
+  const handleExportCSV = () => {
+    const headers = [
+      "Date",
+      "Team Name",
+      "Opponent Name",
+      "Score (Us)",
+      "Score (Them)",
+    ];
+    const rows = filteredGames.map((g) => [
+      new Date(g.game_date).toLocaleDateString(),
+      `"${g.team_name}"`,
+      `"${g.opponent_name}"`,
+      g.final_score_us,
+      g.final_score_them,
+    ]);
+
+    const csvContent = [headers, ...rows].map((e) => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      `subnscore_history_export_${new Date().toISOString().split("T")[0]}.csv`,
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   if (loading)
     return <div className="text-center p-10 font-bold">Loading History...</div>;
 
@@ -123,18 +155,28 @@ export default function HistoryView({ onViewGame }) {
             onChange={(e) => setEndDate(e.target.value)}
           />
         </div>
-        {(startDate || endDate || searchTerm) && (
-          <button
-            onClick={() => {
-              setStartDate("");
-              setEndDate("");
-              setSearchTerm("");
-            }}
-            className="px-4 py-2 text-xs font-black uppercase text-red-500 hover:bg-red-50 rounded-lg transition-all flex items-center gap-2 shrink-0 border border-transparent hover:border-red-100"
-          >
-            <X size={14} /> Clear Filters
-          </button>
-        )}
+        <div className="flex items-center gap-2 ml-auto">
+          {filteredGames.length > 0 && (
+            <button
+              onClick={handleExportCSV}
+              className="px-4 py-2 text-xs font-black uppercase text-blue-600 hover:bg-blue-50 rounded-lg transition-all flex items-center gap-2 shrink-0 border border-blue-100"
+            >
+              <Download size={14} /> Export CSV
+            </button>
+          )}
+          {(startDate || endDate || searchTerm) && (
+            <button
+              onClick={() => {
+                setStartDate("");
+                setEndDate("");
+                setSearchTerm("");
+              }}
+              className="px-4 py-2 text-xs font-black uppercase text-red-500 hover:bg-red-50 rounded-lg transition-all flex items-center gap-2 shrink-0 border border-transparent hover:border-red-100"
+            >
+              <X size={14} /> Clear Filters
+            </button>
+          )}
+        </div>
       </div>
 
       {games.length === 0 ? (

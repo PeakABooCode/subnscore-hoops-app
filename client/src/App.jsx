@@ -1017,17 +1017,31 @@ export default function App() {
                 Setup
               </button>
               <button
+                disabled={!gameInProgress}
                 onClick={() => {
                   setView("LIVE");
                   setHistoryData(null);
                 }}
-                className={`px-2 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-bold transition-all ${view === "LIVE" ? "bg-white text-slate-900 shadow" : "text-slate-400 hover:text-white"}`}
+                className={`px-2 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-bold transition-all ${
+                  view === "LIVE"
+                    ? "bg-white text-slate-900 shadow"
+                    : !gameInProgress
+                      ? "text-slate-600 cursor-not-allowed opacity-50"
+                      : "text-slate-400 hover:text-white"
+                }`}
               >
                 Live
               </button>
               <button
+                disabled={!gameInProgress && !historyData}
                 onClick={() => setView("STATS")}
-                className={`px-2 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-bold transition-all ${view === "STATS" ? "bg-white text-slate-900 shadow" : "text-slate-400 hover:text-white"}`}
+                className={`px-2 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-bold transition-all ${
+                  view === "STATS"
+                    ? "bg-white text-slate-900 shadow"
+                    : !gameInProgress && !historyData
+                      ? "text-slate-600 cursor-not-allowed opacity-50"
+                      : "text-slate-400 hover:text-white"
+                }`}
               >
                 Report
               </button>

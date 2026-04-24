@@ -166,6 +166,11 @@ export default function StatsView({
             <span>{teamMeta?.league || "General League"}</span>
             <span className="text-slate-600">•</span>
             <span>{"Season " + teamMeta?.season || "Unknown Season"}</span>
+            <span>
+              {teamMeta?.season
+                ? `Season ${teamMeta.season}`
+                : "Unknown Season"}
+            </span>
           </p>
         </div>
 
@@ -541,14 +546,14 @@ export default function StatsView({
 
       {/* 5. ACTION ZONE (Save & Reset) */}
       <div className="flex flex-col sm:flex-row justify-between items-center pt-4 border-t border-slate-200 mt-8 gap-4">
-        <button
-          onClick={resetGame}
-          className="w-full sm:w-auto order-2 sm:order-1 bg-white border-2 border-red-200 hover:bg-red-50 hover:border-red-500 text-red-600 font-black py-3 px-6 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2"
-        >
-          {" "}
-          {/* resetGame is now a function that triggers the modal */}
-          <Trash2 size={18} /> {isHistory ? "Close Report" : "Trash Game"}
-        </button>
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto order-2 sm:order-1">
+          <button
+            onClick={resetGame}
+            className="bg-white border-2 border-red-200 hover:bg-red-50 hover:border-red-500 text-red-600 font-black py-3 px-6 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2"
+          >
+            <Trash2 size={18} /> {isHistory ? "Close Report" : "Trash Game"}
+          </button>
+        </div>
 
         {!isHistory && (
           <button
