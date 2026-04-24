@@ -1022,6 +1022,9 @@ export default function App() {
                   setView("LIVE");
                   setHistoryData(null);
                 }}
+                title={
+                  !gameInProgress ? "Start a game to enable Live view" : ""
+                }
                 className={`px-2 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-bold transition-all flex items-center gap-1 ${
                   view === "LIVE"
                     ? "bg-white text-slate-900 shadow"
@@ -1036,6 +1039,11 @@ export default function App() {
               <button
                 disabled={!gameInProgress && !historyData}
                 onClick={() => setView("STATS")}
+                title={
+                  !gameInProgress && !historyData
+                    ? "Start a game or load history to enable Report view"
+                    : ""
+                }
                 className={`px-2 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-bold transition-all flex items-center gap-1 ${
                   view === "STATS"
                     ? "bg-white text-slate-900 shadow"
