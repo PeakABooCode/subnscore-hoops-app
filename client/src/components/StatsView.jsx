@@ -165,7 +165,6 @@ export default function StatsView({
           <p className="text-xs md:text-sm text-slate-400 font-bold uppercase tracking-widest mt-1 flex items-center justify-center md:justify-start gap-2">
             <span>{teamMeta?.league || "General League"}</span>
             <span className="text-slate-600">•</span>
-            <span>{"Season " + teamMeta?.season || "Unknown Season"}</span>
             <span>
               {teamMeta?.season
                 ? `Season ${teamMeta.season}`
@@ -281,7 +280,7 @@ export default function StatsView({
                   </div>
 
                   {/* Stats Grid */}
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-4 gap-2">
                     <div className="bg-slate-50 p-2 rounded-xl text-center border border-slate-100">
                       <div className="text-[10px] font-black text-slate-400 uppercase leading-none mb-1">
                         Pts
@@ -310,6 +309,14 @@ export default function StatsView({
                         {stats.fouls}
                       </div>
                     </div>
+                    <div className="bg-blue-50 p-2 rounded-xl text-center border border-blue-100">
+                      <div className="text-[10px] font-black text-blue-400 uppercase leading-none mb-1">
+                        EFF
+                      </div>
+                      <div className="text-xl font-black text-blue-700">
+                        {stats.score - (stats.turnovers || 0)}
+                      </div>
+                    </div>
                   </div>
                 </div>
               );
@@ -325,6 +332,7 @@ export default function StatsView({
                   <th className="p-4 font-black text-center">PTS</th>
                   <th className="p-4 font-black text-center">TO</th>
                   <th className="p-4 font-black text-center">FLS</th>
+                  <th className="p-4 font-black text-center">EFF</th>
                   <th className="p-4 font-black text-center">Total Min</th>
                 </tr>
               </thead>
@@ -366,6 +374,11 @@ export default function StatsView({
                           className={`inline-flex items-center justify-center w-10 h-10 rounded-lg font-black text-lg ${stats.fouls >= 5 ? "bg-red-600 text-white" : stats.fouls >= 4 ? "bg-red-100 text-red-600" : "bg-slate-100 text-slate-600"}`}
                         >
                           {stats.fouls}
+                        </span>
+                      </td>
+                      <td className="p-4 text-center">
+                        <span className="inline-flex items-center justify-center bg-blue-100 text-blue-800 w-10 h-10 rounded-lg font-black text-lg">
+                          {stats.score - (stats.turnovers || 0)}
                         </span>
                       </td>
                       <td className="p-4 text-center">

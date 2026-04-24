@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import axios from "axios";
 import { Activity, LogOut, History as HistoryIcon, Lock } from "lucide-react";
 
@@ -11,7 +11,11 @@ import ConfirmationModal from "./components/ConfirmationModal";
 import InputModal from "./components/InputModal";
 import HistoryView from "./components/HistoryView";
 import { useTimer } from "./hooks/useTimer";
-import { QUARTER_SECONDS } from "./utils/helpers";
+import {
+  QUARTER_SECONDS,
+  hydrateActions,
+  dehydrateActions,
+} from "./utils/helpers";
 
 axios.defaults.withCredentials = true;
 
@@ -42,13 +46,7 @@ export default function App() {
       const data = JSON.parse(saved);
       // Map keys back to original names (Hydration)
       if (data.actions) {
-        data.actions = data.actions.map((a) => ({
-          playerId: a.p,
-          type: a.t,
-          amount: a.a,
-          quarter: a.q,
-          clock: a.c,
-        }));
+        data.actions = hydrateActions(data.actions);
       }
       return data;
     } catch {
@@ -226,13 +224,7 @@ export default function App() {
       // Map keys to short names to save space (Dehydration)
       const optimizedData = {
         ...historyData,
-        actions: historyData.actions.map((a) => ({
-          p: a.playerId,
-          t: a.type,
-          a: a.amount,
-          q: a.quarter,
-          c: a.clock,
-        })),
+        actions: dehydrateActions(historyData.actions),
       };
       localStorage.setItem(
         "subnscore_historyData",
@@ -1014,19 +1006,24 @@ export default function App() {
   };
 
   // Calculate accumulated time for each player for real-time display
-  const playerTimes = roster.reduce((acc, player) => {
-    let totalSeconds = 0;
-    stints
-      .filter((s) => s.playerId === player.id)
-      .forEach((s) => {
-        // If stint is active (clockOut is null), calculate up to current clock if in current quarter
-        const out =
-          s.clockOut !== null ? s.clockOut : s.quarter === quarter ? clock : 0; // Fallback: Played to the end of the previous quarter
-        totalSeconds += s.clockIn - out;
-      });
-    acc[player.id] = totalSeconds;
-    return acc;
-  }, {});
+  const playerTimes = useMemo(() => {
+    return roster.reduce((acc, player) => {
+      let totalSeconds = 0;
+      stints
+        .filter((s) => s.playerId === player.id)
+        .forEach((s) => {
+          const out =
+            s.clockOut !== null
+              ? s.clockOut
+              : s.quarter === quarter
+                ? clock
+                : 0;
+          totalSeconds += s.clockIn - out;
+        });
+      acc[player.id] = totalSeconds;
+      return acc;
+    }, {});
+  }, [roster, stints, quarter, clock]);
 
   if (isAuthLoading)
     return (
