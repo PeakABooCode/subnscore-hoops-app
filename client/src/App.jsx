@@ -120,6 +120,16 @@ export default function App() {
 
   const [setupAttempted, setSetupAttempted] = useState(false);
 
+  // Derived state to determine if a game session is already active
+  const gameInProgress =
+    stints.length > 0 ||
+    actionHistory.length > 0 ||
+    Object.keys(playerStats).some((id) => {
+      const s = playerStats[id];
+      // If any player has recorded stats, the game is in progress
+      return s && (s.score > 0 || s.fouls > 0 || s.turnovers > 0);
+    });
+
   // Auto-Savers
   useEffect(() => {
     if (!isLoaded.current) return;
@@ -385,24 +395,116 @@ export default function App() {
       return showNotification("Enter team name to search!");
 
     try {
-      const res = await axios.get(`/api/teams/roster/${teamMeta.teamName}`);
-      if (res.data.length === 0)
+      const res = await axios.get(
+        `/api/teams/roster/${encodeURIComponent(teamMeta.teamName)}`,
+      );
+      if (!res.data || !Array.isArray(res.data) || res.data.length === 0)
         return showNotification("No saved roster found.");
 
-      const loadedRoster = res.data.map((p) => ({
-        ...p,
-        id: Math.random().toString(),
-      }));
-      setRoster(loadedRoster);
-      showNotification(`Loaded ${loadedRoster.length} players!`);
+      // 1. Map players from DB to stable IDs
+      const loadedFromDB = res.data
+        .filter((p) => p && typeof p === "object")
+        .map((p) => ({
+          ...p,
+          id: p.id ? p.id.toString() : Date.now().toString() + Math.random(),
+          jersey: p.jersey || p.jersey_number || "",
+        }));
+
+      // 2. PRESERVE MANUAL PLAYERS: Identify players currently in roster but missing from DB
+      const manualAdditions = roster.filter(
+        (currentP) =>
+          currentP &&
+          !loadedFromDB.some(
+            (dbP) =>
+              dbP.name === currentP.name && dbP.jersey === currentP.jersey,
+          ),
+      );
+
+      const combinedRoster = [...loadedFromDB, ...manualAdditions];
+      const loadedPlayerIds = new Set(combinedRoster.map((p) => p.id));
+
+      // 3. Intelligent Data Reconciliation
+      setPlayerStats((prevStats) => {
+        const nextStats = {};
+        // Map old roster to help reconciliation by identity
+        const oldRosterMap = roster.reduce((acc, p) => {
+          if (!p || !p.id) return acc;
+          return { ...acc, [p.id]: `${p.jersey}-${p.name}` };
+        }, {});
+
+        combinedRoster.forEach((p) => {
+          if (!p) return;
+          const key = `${p.jersey}-${p.name}`;
+          // Find if this player existed (by ID or by Identity)
+          const prevId = Object.keys(prevStats).find(
+            (id) => id === p.id || oldRosterMap[id] === key,
+          );
+
+          if (prevId && prevStats[prevId]) {
+            nextStats[p.id] = prevStats[prevId];
+          } else {
+            nextStats[p.id] = { score: 0, fouls: 0, turnovers: 0 };
+          }
+        });
+        return nextStats;
+      });
+
+      // Update stints and action history to use new IDs if they matched by identity
+      // This is crucial for Quarter Data and Timeline reports
+      setStints((prevStints) => {
+        return prevStints
+          .map((s) => {
+            const oldP = roster.find((r) => r.id === s.playerId);
+            if (!oldP) return s;
+            const newP = combinedRoster.find(
+              (r) => r.name === oldP.name && r.jersey === oldP.jersey,
+            );
+            return newP ? { ...s, playerId: newP.id } : s;
+          })
+          .filter((s) => loadedPlayerIds.has(s.playerId));
+      });
+
+      setActionHistory((prevActions) => {
+        return prevActions
+          .map((a) => {
+            if (!a.playerId) return a;
+            const oldP = roster.find((r) => r.id === a.playerId);
+            if (!oldP) return a;
+            const newP = combinedRoster.find(
+              (r) => r.name === oldP.name && r.jersey === oldP.jersey,
+            );
+            return newP ? { ...a, playerId: newP.id } : a;
+          })
+          .filter((a) => !a.playerId || loadedPlayerIds.has(a.playerId));
+      });
+
+      setRoster(combinedRoster);
+
+      // Sync court to ensure no "ghost" IDs exist
+      setCourt((prev) =>
+        prev
+          .filter((id) => {
+            const oldP = roster.find((r) => r.id === id);
+            return (
+              oldP &&
+              combinedRoster.some(
+                (r) => r.name === oldP.name && r.jersey === oldP.jersey,
+              )
+            );
+          })
+          .map((id) => {
+            const oldP = roster.find((r) => r.id === id);
+            return combinedRoster.find(
+              (r) => r.name === oldP.name && r.jersey === oldP.jersey,
+            )?.id;
+          }),
+      );
+
+      setView("SETUP");
+      showNotification(`Loaded ${loadedFromDB.length} players!`);
     } catch (err) {
-      console.error("Load Roster Error:", err.response);
-      if (err.response?.status === 401) {
-        setView("AUTH");
-        showNotification("Session expired. Please log in.");
-      } else {
-        showNotification("Error loading roster.");
-      }
+      console.error("Load Roster Error:", err);
+      showNotification("Error loading roster.");
     }
   };
 
@@ -429,17 +531,30 @@ export default function App() {
       return showNotification("Check team info!");
     if (roster.length < 5) return showNotification("Need 5 players.");
 
-    const starters = roster.slice(0, 5).map((p) => p.id);
-    setCourt(starters);
-    setStints(
-      starters.map((id) => ({
-        id: Math.random().toString(),
-        playerId: id,
-        quarter: 1,
-        clockIn: QUARTER_SECONDS,
-        clockOut: null,
-      })),
-    );
+    // If a game is already in progress, just switch to LIVE view (Resume Mode)
+    if (gameInProgress) {
+      setHistoryData(null);
+      setView("LIVE");
+      return;
+    }
+
+    // NEW GAME INITIALIZATION
+    try {
+      const starters = roster.slice(0, 5).map((p) => p.id);
+      setCourt(starters);
+      setStints(
+        starters.map((id) => ({
+          id: Math.random().toString(),
+          playerId: id,
+          quarter: 1,
+          clockIn: QUARTER_SECONDS,
+          clockOut: null,
+        })),
+      );
+    } catch (err) {
+      console.error("Game Start Initialization Error:", err);
+    }
+
     setHistoryData(null);
     setView("LIVE");
   };
@@ -507,7 +622,7 @@ export default function App() {
     const onCourtSelected = nextSelected.filter((id) => court.includes(id));
     const onBenchSelected = nextSelected.filter((id) => !court.includes(id));
 
-    // If we have a balanced selection (e.g., 1 for 1, 2 for 2, 5 for 5)
+    // If we have a balanced selection (e.g., 1 for 1, 5 for 5)
     if (
       onCourtSelected.length === onBenchSelected.length &&
       onCourtSelected.length > 0
@@ -934,6 +1049,7 @@ export default function App() {
             handleEditPlayer={handleEditPlayer}
             startGame={startGame}
             setupAttempted={setupAttempted}
+            gameInProgress={gameInProgress}
             resetGame={resetGame}
             handleSaveRoster={handleSaveRoster}
             handleLoadRoster={handleLoadRoster}

@@ -113,6 +113,9 @@ export default function LiveView({
 
           {court.map((id) => {
             const p = roster.find((r) => r.id === id);
+            // Safety check: if player not found in roster, skip rendering to prevent crash
+            if (!p) return null;
+
             // Default turnovers to 0 if they don't have any yet
             const stats = playerStats[id] || {
               score: 0,

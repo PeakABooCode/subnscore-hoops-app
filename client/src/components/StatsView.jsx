@@ -8,6 +8,7 @@ import {
   Target,
   CloudUpload,
   Activity,
+  History,
 } from "lucide-react";
 
 export default function StatsView({
@@ -23,7 +24,7 @@ export default function StatsView({
   isHistory, // Prop to detect if we are viewing a past game
   historyQuarterStats, // New prop for pre-calculated quarter data
 }) {
-  const [activeTab, setActiveTab] = useState("boxscore");
+  const [activeTab, setActiveTab] = useState("boxscore"); // boxscore, quarters, timeline
   const [isSaving, setIsSaving] = useState(false);
 
   // --- Calculations ---
@@ -219,6 +220,16 @@ export default function StatsView({
           }`}
         >
           <Clock size={18} /> Quarter Data
+        </button>
+        <button
+          onClick={() => setActiveTab("timeline")}
+          className={`flex-1 py-3 text-sm font-black uppercase tracking-widest rounded-lg flex items-center justify-center gap-2 transition-all ${
+            activeTab === "timeline"
+              ? "bg-white text-blue-600 shadow-sm"
+              : "text-slate-500 hover:text-slate-800 hover:bg-slate-300/50"
+          }`}
+        >
+          <History size={18} /> Timeline
         </button>
       </div>
 
@@ -464,6 +475,69 @@ export default function StatsView({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* 5. TAB 3: TIMELINE (Play-by-play) */}
+      {activeTab === "timeline" && (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="bg-slate-50 px-5 py-4 border-b border-slate-200">
+            <h3 className="font-black text-slate-800 flex items-center gap-2 uppercase tracking-wider text-sm">
+              <History size={18} className="text-blue-600" /> Game Timeline
+            </h3>
+          </div>
+          <div className="divide-y divide-slate-100 max-h-[60vh] overflow-y-auto">
+            {actionHistory.length === 0 ? (
+              <div className="p-10 text-center text-slate-400 font-bold">
+                No events recorded yet.
+              </div>
+            ) : (
+              [...actionHistory].reverse().map((action, idx) => {
+                const p = roster.find((r) => r.id === action.playerId);
+                return (
+                  <div
+                    key={idx}
+                    className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="bg-slate-900 text-amber-400 w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black shrink-0">
+                        Q{action.quarter}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-xs font-black text-blue-600 tabular-nums">
+                          {formatTime(action.clock)}
+                        </span>
+                        <span className="text-sm font-bold text-slate-800">
+                          {p ? `${p.name} (#${p.jersey})` : "Unknown Player"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                          action.type === "score"
+                            ? "bg-emerald-100 text-emerald-700"
+                            : action.type === "fouls"
+                              ? "bg-red-100 text-red-700"
+                              : action.type === "turnovers"
+                                ? "bg-orange-100 text-orange-700"
+                                : "bg-slate-100 text-slate-700"
+                        }`}
+                      >
+                        {action.type === "score"
+                          ? `+${action.amount} Points`
+                          : action.type === "fouls"
+                            ? "Foul"
+                            : action.type === "turnovers"
+                              ? "Turnover"
+                              : action.type}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
       )}
 

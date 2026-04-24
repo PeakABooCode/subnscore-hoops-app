@@ -24,6 +24,7 @@ export default function SetupView({
   setupAttempted,
   resetGame,
   handleSaveRoster,
+  gameInProgress, // New prop
   handleLoadRoster,
 }) {
   const capitalizeWords = (str) => {
@@ -267,7 +268,8 @@ export default function SetupView({
         onClick={startGame}
         className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold text-xl hover:bg-emerald-700 shadow-lg hover:shadow-xl transition-all transform active:scale-[0.98] flex items-center justify-center gap-2"
       >
-        <Play fill="currentColor" size={20} /> Start Game Tracking
+        <Play fill="currentColor" size={20} />{" "}
+        {gameInProgress ? "Resume Game" : "Start Game Tracking"}
       </button>
 
       {/* Reset Data Button */}
