@@ -418,7 +418,8 @@ export default function App() {
         .map((p) => ({
           ...p,
           id: p.id ? p.id.toString() : Date.now().toString() + Math.random(),
-          jersey: p.jersey || p.jersey_number || "",
+          name: (p.name || "").trim(),
+          jersey: (p.jersey || p.jersey_number || "").toString().trim(),
         }));
 
       // 2. PRESERVE MANUAL PLAYERS: Identify players currently in roster but missing from DB
@@ -427,7 +428,8 @@ export default function App() {
           currentP &&
           !loadedFromDB.some(
             (dbP) =>
-              dbP.name === currentP.name && dbP.jersey === currentP.jersey,
+              dbP.name.toLowerCase() === currentP.name.trim().toLowerCase() &&
+              dbP.jersey === currentP.jersey.toString().trim(),
           ),
       );
 
@@ -440,12 +442,15 @@ export default function App() {
         // Map old roster to help reconciliation by identity
         const oldRosterMap = roster.reduce((acc, p) => {
           if (!p || !p.id) return acc;
-          return { ...acc, [p.id]: `${p.jersey}-${p.name}` };
+          return {
+            ...acc,
+            [p.id]: `${p.jersey.toString().trim()}-${p.name.trim().toLowerCase()}`,
+          };
         }, {});
 
         combinedRoster.forEach((p) => {
           if (!p) return;
-          const key = `${p.jersey}-${p.name}`;
+          const key = `${p.jersey}-${p.name.toLowerCase()}`;
           // Find if this player existed (by ID or by Identity)
           const prevId = Object.keys(prevStats).find(
             (id) => id === p.id || oldRosterMap[id] === key,
@@ -468,7 +473,9 @@ export default function App() {
             const oldP = roster.find((r) => r.id === s.playerId);
             if (!oldP) return s;
             const newP = combinedRoster.find(
-              (r) => r.name === oldP.name && r.jersey === oldP.jersey,
+              (r) =>
+                r.name.toLowerCase() === oldP.name.trim().toLowerCase() &&
+                r.jersey === oldP.jersey.toString().trim(),
             );
             return newP ? { ...s, playerId: newP.id } : s;
           })
@@ -482,7 +489,9 @@ export default function App() {
             const oldP = roster.find((r) => r.id === a.playerId);
             if (!oldP) return a;
             const newP = combinedRoster.find(
-              (r) => r.name === oldP.name && r.jersey === oldP.jersey,
+              (r) =>
+                r.name.toLowerCase() === oldP.name.trim().toLowerCase() &&
+                r.jersey === oldP.jersey.toString().trim(),
             );
             return newP ? { ...a, playerId: newP.id } : a;
           })
@@ -499,14 +508,18 @@ export default function App() {
             return (
               oldP &&
               combinedRoster.some(
-                (r) => r.name === oldP.name && r.jersey === oldP.jersey,
+                (r) =>
+                  r.name.toLowerCase() === oldP.name.trim().toLowerCase() &&
+                  r.jersey === oldP.jersey.toString().trim(),
               )
             );
           })
           .map((id) => {
             const oldP = roster.find((r) => r.id === id);
             return combinedRoster.find(
-              (r) => r.name === oldP.name && r.jersey === oldP.jersey,
+              (r) =>
+                r.name.toLowerCase() === oldP.name.trim().toLowerCase() &&
+                r.jersey === oldP.jersey.toString().trim(),
             )?.id;
           }),
       );
@@ -523,6 +536,16 @@ export default function App() {
   const handleAddPlayer = (e) => {
     e.preventDefault();
     if (!newPlayer.name || !newPlayer.jersey) return;
+
+    const jerseyExists = roster.some(
+      (p) => p.jersey.toString().trim() === newPlayer.jersey.toString().trim(),
+    );
+    if (jerseyExists) {
+      return showNotification(
+        `Jersey #${newPlayer.jersey} is already assigned.`,
+      );
+    }
+
     const id = Date.now().toString();
     setRoster([...roster, { ...newPlayer, id }]);
     setPlayerStats({
@@ -914,7 +937,7 @@ export default function App() {
         type: l.action_type,
         amount: l.amount,
         quarter: l.quarter,
-        clock: l.time_remaining,
+        clock: Number(l.time_remaining),
       }));
 
       setHistoryData({
@@ -939,11 +962,7 @@ export default function App() {
       .forEach((s) => {
         // If stint is active (clockOut is null), calculate up to current clock if in current quarter
         const out =
-          s.clockOut !== null
-            ? s.clockOut
-            : s.quarter === quarter
-              ? clock
-              : s.clockIn; // Should not happen with advanceQuarter logic
+          s.clockOut !== null ? s.clockOut : s.quarter === quarter ? clock : 0; // Fallback: Played to the end of the previous quarter
         totalSeconds += s.clockIn - out;
       });
     acc[player.id] = totalSeconds;

@@ -34,7 +34,11 @@ export default function SetupView({
   const capitalizeWords = (str) => {
     return str
       .split(" ")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .map((word) =>
+        word.length > 0
+          ? word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+          : "",
+      )
       .join(" ");
   };
 

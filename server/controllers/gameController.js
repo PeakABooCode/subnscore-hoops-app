@@ -23,14 +23,27 @@ export const saveGameSession = async (req, res) => {
     // We use a Transaction to ensure all-or-nothing saving (Atomic)
     await pool.query("BEGIN");
 
-    // 1. Upsert the Team
-    const teamResult = await pool.query(
-      `INSERT INTO teams (coach_id, name, league, season) 
-       VALUES ($1, $2, $3, $4) 
-       RETURNING id`,
-      [coachId, teamMeta.teamName, teamMeta.league, teamMeta.season],
+    // 1. Upsert the Team (Find existing by name/coach or create)
+    let teamRes = await pool.query(
+      "SELECT id FROM teams WHERE coach_id = $1 AND name = $2",
+      [coachId, teamMeta.teamName],
     );
-    const teamId = teamResult.rows[0].id;
+
+    let teamId;
+    if (teamRes.rows.length > 0) {
+      teamId = teamRes.rows[0].id;
+      // Update league/season in case they changed
+      await pool.query(
+        "UPDATE teams SET league = $1, season = $2 WHERE id = $3",
+        [teamMeta.league, teamMeta.season, teamId],
+      );
+    } else {
+      const newTeam = await pool.query(
+        "INSERT INTO teams (coach_id, name, league, season) VALUES ($1, $2, $3, $4) RETURNING id",
+        [coachId, teamMeta.teamName, teamMeta.league, teamMeta.season],
+      );
+      teamId = newTeam.rows[0].id;
+    }
 
     // 2. Insert the Game record with final scores
     const gameResult = await pool.query(
@@ -170,7 +183,7 @@ export const getGameDetails = async (req, res) => {
       [id],
     );
     const logs = await pool.query(
-      `SELECT * FROM action_logs WHERE game_id = $1 ORDER BY id ASC`,
+      `SELECT * FROM action_logs WHERE game_id = $1 ORDER BY quarter ASC, time_remaining DESC, id ASC`,
       [id],
     );
     const qStats = await pool.query(
