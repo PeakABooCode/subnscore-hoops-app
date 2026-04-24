@@ -27,6 +27,7 @@ export default function SetupView({
   handleSaveRoster,
   gameInProgress, // New prop
   handleLoadRoster,
+  availableTeams = [],
 }) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [playerToEdit, setPlayerToEdit] = useState(null);
@@ -77,6 +78,7 @@ export default function SetupView({
               )}
             </label>
             <input
+              list="team-suggestions"
               className={`border p-2.5 rounded-lg outline-none transition-all duration-200 ${
                 setupAttempted && !teamMeta.teamName.trim()
                   ? "border-red-500 bg-red-50 ring-1 ring-red-200"
@@ -84,13 +86,32 @@ export default function SetupView({
               }`}
               placeholder="e.g. Lakers"
               value={teamMeta.teamName}
-              onChange={(e) =>
-                setTeamMeta({
-                  ...teamMeta,
-                  teamName: capitalizeWords(e.target.value),
-                })
-              }
+              onChange={(e) => {
+                const val = capitalizeWords(e.target.value);
+                const matchedTeam = availableTeams.find(
+                  (t) => t.name.toLowerCase() === val.toLowerCase(),
+                );
+
+                if (matchedTeam) {
+                  setTeamMeta({
+                    ...teamMeta,
+                    teamName: val,
+                    league: matchedTeam.league || teamMeta.league,
+                    season: matchedTeam.season || teamMeta.season,
+                  });
+                } else {
+                  setTeamMeta({
+                    ...teamMeta,
+                    teamName: val,
+                  });
+                }
+              }}
             />
+            <datalist id="team-suggestions">
+              {availableTeams.map((t, idx) => (
+                <option key={idx} value={t.name} />
+              ))}
+            </datalist>
           </div>
 
           {/* OPPONENT NAME INPUT */}

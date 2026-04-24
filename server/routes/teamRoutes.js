@@ -1,5 +1,9 @@
 import express from "express";
-import { saveRoster, getTeamRoster } from "../controllers/teamController.js";
+import {
+  saveRoster,
+  getTeamRoster,
+  getCoachTeams,
+} from "../controllers/teamController.js";
 
 const router = express.Router();
 
@@ -12,6 +16,7 @@ const isAuth = (req, res, next) => {
 };
 
 // All team routes are protected by session auth
+router.get("/", isAuth, getCoachTeams);
 router.post("/roster", isAuth, saveRoster);
 router.get("/roster/:name", isAuth, getTeamRoster);
 

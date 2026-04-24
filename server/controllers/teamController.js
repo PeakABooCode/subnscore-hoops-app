@@ -61,3 +61,20 @@ export const getTeamRoster = async (req, res) => {
     res.status(500).json({ error: "Failed to load team roster." });
   }
 };
+
+export const getCoachTeams = async (req, res) => {
+  try {
+    const coachId = req.user.id;
+    const result = await pool.query(
+      `SELECT name, league, season 
+       FROM teams 
+       WHERE coach_id = $1 
+       ORDER BY name ASC`,
+      [coachId],
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Fetch Teams Error:", err);
+    res.status(500).json({ error: "Failed to load teams list." });
+  }
+};

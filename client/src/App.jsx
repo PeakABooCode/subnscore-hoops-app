@@ -140,6 +140,22 @@ export default function App() {
   });
 
   const [setupAttempted, setSetupAttempted] = useState(false);
+  const [availableTeams, setAvailableTeams] = useState([]);
+
+  // Fetch coach's existing teams for lookup/auto-fill in SetupView
+  useEffect(() => {
+    if (user && view === "SETUP") {
+      const fetchTeams = async () => {
+        try {
+          const res = await axios.get("/api/teams");
+          setAvailableTeams(res.data);
+        } catch (err) {
+          console.error("Error fetching available teams:", err);
+        }
+      };
+      fetchTeams();
+    }
+  }, [user, view]);
 
   // --- Modal States ---
   const [isResetGameConfirmOpen, setIsResetGameConfirmOpen] = useState(false);
@@ -1155,6 +1171,7 @@ export default function App() {
             resetGame={resetGame}
             handleSaveRoster={handleSaveRoster}
             handleLoadRoster={handleLoadRoster}
+            availableTeams={availableTeams}
           />
         )}
 
