@@ -170,6 +170,11 @@ export const calculateLineupStats = (
           .reduce((sum, a) => sum + a.amount, 0);
         lineupStats[lineupKey].pointsScored += pointsInInterval;
       }
+
+      // Update the court state based on the event for the next interval
+      if (event.type === "in") currentCourt.add(event.playerId);
+      if (event.type === "out") currentCourt.delete(event.playerId);
+
       lastClock = event.clock;
     }
 
