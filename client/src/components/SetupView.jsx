@@ -8,9 +8,11 @@ import {
   Calendar,
   CloudDownload,
   Save,
+  List,
 } from "lucide-react";
 import EditPlayerModal from "./EditPlayerModal";
 import { capitalizeWords } from "../utils/helpers";
+import TeamSelectionModal from "./TeamSelectionModal";
 
 export default function SetupView({
   user,
@@ -32,6 +34,7 @@ export default function SetupView({
 }) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [playerToEdit, setPlayerToEdit] = useState(null);
+  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
 
   const onEditClick = (p) => {
     setPlayerToEdit(p);
@@ -41,6 +44,16 @@ export default function SetupView({
   const handleModalSave = (id, updates) => {
     handleEditPlayer(id, updates);
     setIsEditModalOpen(false);
+  };
+
+  const handleTeamSelect = (team) => {
+    setTeamMeta({
+      ...teamMeta,
+      teamName: team.name,
+      league: team.league || "",
+      season: team.season || "",
+    });
+    setIsTeamModalOpen(false);
   };
 
   const nameInputRef = useRef(null);
@@ -69,41 +82,45 @@ export default function SetupView({
                 <span className="text-red-500 animate-pulse">*</span>
               )}
             </label>
-            <input
-              list="team-suggestions"
-              className={`border p-2.5 rounded-lg outline-none transition-all duration-200 ${
-                setupAttempted && !teamMeta.teamName.trim()
-                  ? "border-red-500 bg-red-50 ring-1 ring-red-200"
-                  : "focus:border-blue-500 focus:ring-2 focus:ring-blue-100 border-slate-200"
-              }`}
-              placeholder="e.g. Lakers"
-              value={teamMeta.teamName}
-              onChange={(e) => {
-                const val = capitalizeWords(e.target.value);
-                const matchedTeam = availableTeams.find(
-                  (t) => t.name.toLowerCase() === val.toLowerCase(),
-                );
+            <div className="relative">
+              <input
+                className={`w-full border p-2.5 pr-10 rounded-lg outline-none transition-all duration-200 ${
+                  setupAttempted && !teamMeta.teamName.trim()
+                    ? "border-red-500 bg-red-50 ring-1 ring-red-200"
+                    : "focus:border-blue-500 focus:ring-2 focus:ring-blue-100 border-slate-200"
+                }`}
+                placeholder="e.g. Lakers"
+                value={teamMeta.teamName}
+                onChange={(e) => {
+                  const val = capitalizeWords(e.target.value);
+                  const matchedTeam = availableTeams.find(
+                    (t) => t.name.toLowerCase() === val.toLowerCase(),
+                  );
 
-                if (matchedTeam) {
-                  setTeamMeta({
-                    ...teamMeta,
-                    teamName: val,
-                    league: matchedTeam.league || teamMeta.league,
-                    season: matchedTeam.season || teamMeta.season,
-                  });
-                } else {
-                  setTeamMeta({
-                    ...teamMeta,
-                    teamName: val,
-                  });
-                }
-              }}
-            />
-            <datalist id="team-suggestions">
-              {availableTeams.map((t, idx) => (
-                <option key={idx} value={t.name} />
-              ))}
-            </datalist>
+                  if (matchedTeam) {
+                    setTeamMeta({
+                      ...teamMeta,
+                      teamName: val,
+                      league: matchedTeam.league || teamMeta.league,
+                      season: matchedTeam.season || teamMeta.season,
+                    });
+                  } else {
+                    setTeamMeta({
+                      ...teamMeta,
+                      teamName: val,
+                    });
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setIsTeamModalOpen(true)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 transition-colors p-1"
+                title="Select from existing teams"
+              >
+                <List size={20} />
+              </button>
+            </div>
           </div>
 
           {/* OPPONENT NAME INPUT */}
@@ -299,6 +316,13 @@ export default function SetupView({
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
         onSave={handleModalSave}
+      />
+
+      <TeamSelectionModal
+        isOpen={isTeamModalOpen}
+        onClose={() => setIsTeamModalOpen(false)}
+        teams={availableTeams}
+        onSelect={handleTeamSelect}
       />
 
       {/* Reset Data Button */}

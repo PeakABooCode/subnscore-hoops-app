@@ -16,6 +16,11 @@ export const saveRoster = async (req, res) => {
     let teamId;
     if (teamRes.rows.length > 0) {
       teamId = teamRes.rows[0].id;
+      // Update timestamp when roster is saved
+      await pool.query(
+        "UPDATE teams SET updated_at = CURRENT_TIMESTAMP WHERE id = $1",
+        [teamId],
+      );
     } else {
       const newTeam = await pool.query(
         "INSERT INTO teams (coach_id, name) VALUES ($1, $2) RETURNING id",
@@ -73,10 +78,10 @@ export const getCoachTeams = async (req, res) => {
   try {
     const coachId = req.user.id;
     const result = await pool.query(
-      `SELECT name, league, season 
+      `SELECT name, league, season, updated_at 
        FROM teams 
        WHERE coach_id = $1 
-       ORDER BY name ASC`,
+       ORDER BY updated_at DESC`,
       [coachId],
     );
     res.json(result.rows);

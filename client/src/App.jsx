@@ -146,7 +146,11 @@ export default function App() {
       const fetchTeams = async () => {
         try {
           const res = await axios.get("/api/teams");
-          setAvailableTeams(res.data);
+          // Sort by updated_at descending to put recently used teams first
+          const sorted = [...res.data].sort(
+            (a, b) => new Date(b.updated_at) - new Date(a.updated_at),
+          );
+          setAvailableTeams(sorted);
         } catch (err) {
           console.error("Error fetching available teams:", err);
         }

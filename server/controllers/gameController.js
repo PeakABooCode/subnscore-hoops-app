@@ -34,7 +34,7 @@ export const saveGameSession = async (req, res) => {
       teamId = teamRes.rows[0].id;
       // Update league/season in case they changed
       await pool.query(
-        "UPDATE teams SET league = $1, season = $2 WHERE id = $3",
+        "UPDATE teams SET league = $1, season = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3",
         [teamMeta.league, teamMeta.season, teamId],
       );
     } else {
