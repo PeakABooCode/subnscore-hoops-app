@@ -312,24 +312,6 @@ export default function App() {
     }, 100);
   }, []);
 
-  // --- Pasarelle Rule Monitor ---
-  useEffect(() => {
-    // 300 seconds is exactly 5:00 remaining
-    if (
-      isRunning &&
-      quarter <= 3 &&
-      clock === 300 &&
-      !pasarelleTriggered[quarter]
-    ) {
-      setIsRunning(false);
-      setPasarelleTriggered((prev) => ({ ...prev, [quarter]: true }));
-      showNotification(
-        "PASARELLE ALERT: Mandatory 5-Minute Unit Substitution!",
-      );
-      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-    }
-  }, [clock, quarter, isRunning, pasarelleTriggered]);
-
   const showNotification = (msg) => {
     setNotification(msg);
     setTimeout(() => setNotification(null), 3000);

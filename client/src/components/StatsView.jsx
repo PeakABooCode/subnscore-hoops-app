@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   formatTime,
   QUARTER_SECONDS,
@@ -96,7 +96,7 @@ export default function StatsView({
     return "0:00";
   };
 
-  const getQuarterAppearances = () => {
+  const quarterData = useMemo(() => {
     const quarters = {};
     for (let i = 1; i <= quarter; i++) {
       quarters[i] = [];
@@ -127,7 +127,7 @@ export default function StatsView({
       });
     }
     return quarters;
-  };
+  }, [quarter, isHistory, historyQuarterStats, actionHistory, stints]);
 
   const getQuarterStats = (
     playerId,
@@ -196,41 +196,39 @@ export default function StatsView({
   };
 
   // Calculate lineup stats
-  const lineupStats = calculateLineupStats(
-    // This will now return an array
-    roster,
-    stints,
-    actionHistory,
-    quarter,
-    clock,
+  const lineupStats = useMemo(
+    () => calculateLineupStats(roster, stints, actionHistory, quarter, clock),
+    [roster, stints, actionHistory, quarter, clock],
   );
 
   // Advanced sorting logic for lineups
-  const sortedLineups = [...lineupStats].sort((a, b) => {
-    const getEff = (l) => l.pointsScored - (l.turnovers || 0);
+  const sortedLineups = useMemo(() => {
+    return [...lineupStats].sort((a, b) => {
+      const getEff = (l) => l.pointsScored - (l.turnovers || 0);
 
-    switch (lineupSortBy) {
-      case "pts":
-        return b.pointsScored - a.pointsScored || b.totalTime - a.totalTime;
-      case "pm":
-        return (
-          b.pointsScored -
-          (b.pointsAgainst || 0) -
-          (a.pointsScored - (a.pointsAgainst || 0))
-        );
-      case "time":
-        return b.totalTime - a.totalTime || b.pointsScored - a.pointsScored;
-      case "to":
-        return (b.turnovers || 0) - (a.turnovers || 0);
-      case "fls":
-        return (b.fouls || 0) - (a.fouls || 0);
-      case "eff":
-      default:
-        const effA = getEff(a);
-        const effB = getEff(b);
-        return effB - effA || b.pointsScored - a.pointsScored;
-    }
-  });
+      switch (lineupSortBy) {
+        case "pts":
+          return b.pointsScored - a.pointsScored || b.totalTime - a.totalTime;
+        case "pm":
+          return (
+            b.pointsScored -
+            (b.pointsAgainst || 0) -
+            (a.pointsScored - (a.pointsAgainst || 0))
+          );
+        case "time":
+          return b.totalTime - a.totalTime || b.pointsScored - a.pointsScored;
+        case "to":
+          return (b.turnovers || 0) - (a.turnovers || 0);
+        case "fls":
+          return (b.fouls || 0) - (a.fouls || 0);
+        case "eff":
+        default:
+          const effA = getEff(a);
+          const effB = getEff(b);
+          return effB - effA || b.pointsScored - a.pointsScored;
+      }
+    });
+  }, [lineupStats, lineupSortBy]);
 
   // Simple visual trend component
   const TrendSparkline = ({ trend = [0] }) => {
@@ -267,7 +265,6 @@ export default function StatsView({
 
   const currentLineupKey = !isHistory ? [...court].sort().join("-") : "";
 
-  const quarterData = getQuarterAppearances();
   const dynamicQuartersArray = Array.from({ length: quarter }, (_, i) => i + 1);
 
   return (
@@ -540,81 +537,6 @@ export default function StatsView({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {dynamicQuartersArray.map((q) => {
               const playersInQuarter = quarterData[q] || [];
-
-              const isPasarelle = q <= 3;
-
-              const renderPlayerRow = (
-                id,
-                start = QUARTER_SECONDS,
-                end = 0,
-              ) => {
-                const p = roster.find((r) => r.id === id);
-                if (!p) return null;
-                const qStats = getQuarterStats(id, q, start, end);
-                return (
-                  <div
-                    key={`${q}-${id}`}
-                    className="bg-white border border-slate-200 px-3 py-2 rounded-lg flex items-center justify-between shadow-sm"
-                  >
-                    <div className="flex items-center gap-2 truncate pr-2">
-                      <span className="text-xs font-black text-slate-400">
-                        #{p.jersey}
-                      </span>
-                      <span className="text-sm font-bold text-slate-800 truncate">
-                        {p.name}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 border-l border-slate-200 pl-3 shrink-0">
-                      <div className="flex flex-col items-center justify-center">
-                        <span className="text-[8px] font-black text-slate-400 uppercase leading-none">
-                          Min
-                        </span>
-                        <span className="text-sm font-black text-blue-600 leading-none mt-0.5">
-                          {qStats.qTime}
-                        </span>
-                      </div>
-                      <div className="flex flex-col items-center justify-center ml-1">
-                        <span className="text-[8px] font-black text-slate-400 uppercase leading-none">
-                          Pts
-                        </span>
-                        <span className="text-sm font-black text-slate-700 leading-none mt-0.5">
-                          {qStats.qPts}
-                        </span>
-                      </div>
-                      <div className="flex flex-col items-center justify-center ml-1">
-                        <span className="text-[8px] font-black text-slate-400 uppercase leading-none">
-                          TO
-                        </span>
-                        <span
-                          className={`text-sm font-black leading-none mt-0.5 ${qStats.qTOs > 0 ? "text-orange-500" : "text-slate-700"}`}
-                        >
-                          {qStats.qTOs}
-                        </span>
-                      </div>
-                      <div className="flex flex-col items-center justify-center ml-1">
-                        <span className="text-[8px] font-black text-slate-400 uppercase leading-none">
-                          Fls
-                        </span>
-                        <span
-                          className={`text-sm font-black leading-none mt-0.5 ${qStats.qFls > 0 ? "text-red-500" : "text-slate-700"}`}
-                        >
-                          {qStats.qFls}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              };
-
-              const firstHalfPlayers = playersInQuarter.filter((id) => {
-                const s = getQuarterStats(id, q, 600, 300);
-                return s.rawSecs > 0 || s.qPts > 0 || s.qFls > 0 || s.qTOs > 0;
-              });
-              const secondHalfPlayers = playersInQuarter.filter((id) => {
-                const s = getQuarterStats(id, q, 300, 0);
-                return s.rawSecs > 0 || s.qPts > 0 || s.qFls > 0 || s.qTOs > 0;
-              });
-
               return (
                 <div
                   key={`qtr-${q}`}
@@ -628,40 +550,75 @@ export default function StatsView({
                       {playersInQuarter.length} Appeared
                     </span>
                   </div>
+
                   <div className="p-4 flex-1 bg-slate-50">
-                    {playersInQuarter.length === 0 ? (
-                      <div className="h-full flex flex-col items-center justify-center text-slate-400 py-6 opacity-50 text-center">
-                        <Target size={24} className="mb-2 mx-auto" />
-                        <p className="text-xs font-bold uppercase tracking-widest">
-                          No Activity Recorded
-                        </p>
-                      </div>
-                    ) : isPasarelle && !isHistory ? (
-                      <div className="space-y-4">
-                        <div>
-                          <div className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-2 border-b border-blue-100 pb-1">
-                            Segment 1 (10:00 - 5:00)
-                          </div>
-                          <div className="flex flex-col gap-2">
-                            {firstHalfPlayers.map((id) =>
-                              renderPlayerRow(id, 600, 300),
-                            )}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-2 border-b border-orange-100 pb-1">
-                            Segment 2 (5:00 - 0:00)
-                          </div>
-                          <div className="flex flex-col gap-2">
-                            {secondHalfPlayers.map((id) =>
-                              renderPlayerRow(id, 300, 0),
-                            )}
-                          </div>
-                        </div>
+                    {playersInQuarter.length > 0 ? (
+                      <div className="flex flex-col gap-2">
+                        {playersInQuarter.map((id) => {
+                          const p = roster.find((r) => r.id === id);
+                          if (!p) return null;
+                          const qStats = getQuarterStats(id, q);
+                          return (
+                            <div
+                              key={`${q}-${id}`}
+                              className="bg-white border border-slate-200 px-3 py-2 rounded-lg flex items-center justify-between shadow-sm"
+                            >
+                              <div className="flex items-center gap-2 truncate pr-2">
+                                <span className="text-xs font-black text-slate-400">
+                                  #{p.jersey}
+                                </span>
+                                <span className="text-sm font-bold text-slate-800 truncate">
+                                  {p.name}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 border-l border-slate-200 pl-3 shrink-0">
+                                <div className="flex flex-col items-center justify-center">
+                                  <span className="text-[8px] font-black text-slate-400 uppercase leading-none">
+                                    Min
+                                  </span>
+                                  <span className="text-sm font-black text-blue-600 leading-none mt-0.5">
+                                    {qStats.qTime}
+                                  </span>
+                                </div>
+                                <div className="flex flex-col items-center justify-center ml-1">
+                                  <span className="text-[8px] font-black text-slate-400 uppercase leading-none">
+                                    Pts
+                                  </span>
+                                  <span className="text-sm font-black text-slate-700 leading-none mt-0.5">
+                                    {qStats.qPts}
+                                  </span>
+                                </div>
+                                <div className="flex flex-col items-center justify-center ml-1">
+                                  <span className="text-[8px] font-black text-slate-400 uppercase leading-none">
+                                    TO
+                                  </span>
+                                  <span
+                                    className={`text-sm font-black leading-none mt-0.5 ${qStats.qTOs > 0 ? "text-orange-500" : "text-slate-700"}`}
+                                  >
+                                    {qStats.qTOs}
+                                  </span>
+                                </div>
+                                <div className="flex flex-col items-center justify-center ml-1">
+                                  <span className="text-[8px] font-black text-slate-400 uppercase leading-none">
+                                    Fls
+                                  </span>
+                                  <span
+                                    className={`text-sm font-black leading-none mt-0.5 ${qStats.qFls > 0 ? "text-red-500" : "text-slate-700"}`}
+                                  >
+                                    {qStats.qFls}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     ) : (
-                      <div className="flex flex-col gap-2">
-                        {playersInQuarter.map((id) => renderPlayerRow(id))}
+                      <div className="h-full flex flex-col items-center justify-center text-slate-400 py-6 opacity-50">
+                        <Target size={24} className="mb-2" />
+                        <p className="text-xs font-bold uppercase tracking-widest text-center">
+                          No Activity Recorded
+                        </p>
                       </div>
                     )}
                   </div>
