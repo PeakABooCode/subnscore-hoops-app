@@ -997,7 +997,7 @@ export default function App() {
   };
 
   // --- Backend Integration Handlers --- //
-  const handleSaveGame = async (oppScoreValue) => {
+  const handleSaveGame = async () => {
     if (user?.email === "demo@subnscore.com")
       return showNotification("Demo Mode: Cannot save.");
 
@@ -1006,14 +1006,10 @@ export default function App() {
       return acc + (curr.score || 0);
     }, 0);
 
-    // If oppScoreValue is not provided, open the input modal
-    if (oppScoreValue === undefined) {
-      setSaveGameCallback(() => (score) => handleSaveGame(score));
-      setIsOpponentScoreInputOpen(true);
-      return;
-    }
-
-    const oppScore = parseInt(oppScoreValue) || 0;
+    // Automatically calculate final opponent score from the recorded logs
+    const oppScore = actionHistory
+      .filter((a) => a.type === "opp_score")
+      .reduce((acc, curr) => acc + (curr.amount || 0), 0);
 
     try {
       // Final Minutes and Seconds Calculation for the DB columns
@@ -1094,7 +1090,10 @@ export default function App() {
       }
 
       const payload = {
-        teamMeta,
+        teamMeta: {
+          ...teamMeta,
+          game_mode: gameMode,
+        },
         roster: finalRosterWithMins,
         calculatedQuarterStats,
         playerStats,
@@ -1390,6 +1389,9 @@ export default function App() {
             deleteAction={deleteAction}
             isHistory={!!historyData}
             historyQuarterStats={historyData?.quarterStats}
+            gameMode={
+              historyData ? historyData.meta.game_mode || "FULL" : gameMode
+            }
           />
         )}
 
@@ -1419,17 +1421,6 @@ export default function App() {
           message={`Are you sure you want to end ${quarter > 4 ? `Overtime ${quarter - 4}` : `Quarter ${quarter}`} and advance to the next period?`}
           confirmText="Advance Quarter"
           confirmButtonClass="bg-blue-600 hover:bg-blue-700"
-        />
-
-        {/* Input Modal for Opponent Score */}
-        <InputModal
-          isOpen={isOpponentScoreInputOpen}
-          onClose={() => setIsOpponentScoreInputOpen(false)}
-          onSave={saveGameCallback}
-          title={`Enter Final Score for ${teamMeta.opponent}`}
-          message="Please enter the opponent's final score to save the game."
-          initialValue={opponentScoreInput}
-          inputType="number"
         />
       </main>
     </div>

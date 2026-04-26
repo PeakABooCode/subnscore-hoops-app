@@ -47,9 +47,15 @@ export const saveGameSession = async (req, res) => {
 
     // 2. Insert the Game record with final scores
     const gameResult = await pool.query(
-      `INSERT INTO games (team_id, opponent_name, final_score_us, final_score_them) 
-       VALUES ($1, $2, $3, $4) RETURNING id`,
-      [teamId, teamMeta.opponent, finalScoreUs || 0, finalScoreThem || 0],
+      `INSERT INTO games (team_id, opponent_name, final_score_us, final_score_them, game_mode) 
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [
+        teamId,
+        teamMeta.opponent,
+        finalScoreUs || 0,
+        finalScoreThem || 0,
+        teamMeta.game_mode || "FULL",
+      ],
     );
     const gameId = gameResult.rows[0].id;
 
@@ -114,32 +120,27 @@ export const saveGameSession = async (req, res) => {
     // 4. Save Action Logs & Specific Substitution Logs
     for (const log of actionHistory) {
       // A. Save to the general action_logs table
+      // Use || null to ensure we never pass 'undefined' to the DB driver
+      const dbPlayerId = log.playerId ? playerMap[log.playerId] || null : null;
+
       await pool.query(
         `INSERT INTO action_logs (game_id, player_id, action_type, amount, quarter, time_remaining) 
          VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          gameId,
-          playerMap[log.playerId],
-          log.type,
-          log.amount || 0,
-          log.quarter,
-          log.clock,
-        ],
+        [gameId, dbPlayerId, log.type, log.amount || 0, log.quarter, log.clock],
       );
 
       // B. Save to substitution_logs if the type matches a sub event
       if (log.type === "SUB_IN" || log.type === "SUB_OUT") {
         const mappedType = log.type === "SUB_IN" ? "IN" : "OUT";
-        const intervalValue = `${log.clock} seconds`;
 
         await pool.query(
           `INSERT INTO substitution_logs (game_id, player_id, quarter, time_remaining, action_type) 
            VALUES ($1, $2, $3, $4, $5)`,
           [
             gameId,
-            playerMap[log.playerId],
+            dbPlayerId, // Already calculated above with null safety
             log.quarter,
-            intervalValue,
+            log.clock, // Send as Integer to match action_logs data type
             mappedType,
           ],
         );
