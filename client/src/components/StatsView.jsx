@@ -14,6 +14,7 @@ import {
   Activity,
   History,
   Group, // For Lineups tab
+  TrendingUp,
 } from "lucide-react";
 
 export default function StatsView({
@@ -27,6 +28,7 @@ export default function StatsView({
   actionHistory = [],
   triggerSaveGame, // Prop to trigger save game modal from App.jsx
   deleteAction, // Prop to delete specific action from App.jsx
+  court = [], // Active players on court
   isHistory, // Prop to detect if we are viewing a past game
   historyQuarterStats, // New prop for pre-calculated quarter data
 }) {
@@ -102,14 +104,24 @@ export default function StatsView({
     return quarters;
   };
 
-  const getQuarterStats = (playerId, qtr) => {
+  const getQuarterStats = (
+    playerId,
+    qtr,
+    startLimit = QUARTER_SECONDS,
+    endLimit = 0,
+  ) => {
     let qPts = 0;
     let qFls = 0;
     let qTOs = 0;
     let qSecs = 0;
 
     actionHistory.forEach((action) => {
-      if (action.playerId === playerId && action.quarter === qtr) {
+      if (
+        action.playerId === playerId &&
+        action.quarter === qtr &&
+        action.clock <= startLimit &&
+        action.clock > endLimit
+      ) {
         if (action.type === "score") qPts += action.amount;
         if (action.type === "fouls") qFls += action.amount;
         if (action.type === "turnovers") qTOs += action.amount;
@@ -117,7 +129,12 @@ export default function StatsView({
     });
 
     // Calculate playing time for this specific player in this specific quarter
-    if (isHistory && historyQuarterStats) {
+    if (
+      isHistory &&
+      historyQuarterStats &&
+      startLimit === QUARTER_SECONDS &&
+      endLimit === 0
+    ) {
       const qs = historyQuarterStats.find(
         (s) =>
           (s.player_id === playerId || s.playerId === playerId) &&
@@ -138,18 +155,15 @@ export default function StatsView({
       stints
         .filter((s) => s.playerId === playerId && s.quarter === qtr)
         .forEach((s) => {
-          if (s.clockOut !== null) {
-            qSecs += s.clockIn - s.clockOut;
-          } else if (s.quarter === quarter) {
-            qSecs += s.clockIn - clock;
-          } else if (s.quarter < quarter) {
-            // This stint belongs to the quarter we are calculating (qtr < current quarter)
-            qSecs += s.clockIn - 0;
-          }
+          const sOut =
+            s.clockOut !== null ? s.clockOut : qtr === quarter ? clock : 0;
+          const overlapIn = Math.min(startLimit, s.clockIn);
+          const overlapOut = Math.max(endLimit, sOut);
+          if (overlapIn > overlapOut) qSecs += overlapIn - overlapOut;
         });
     }
 
-    return { qPts, qFls, qTOs, qTime: formatTime(qSecs) };
+    return { qPts, qFls, qTOs, qTime: formatTime(qSecs), rawSecs: qSecs };
   };
 
   const onSaveClick = async () => {
@@ -165,6 +179,41 @@ export default function StatsView({
     quarter,
     clock,
   );
+
+  // Simple visual trend component
+  const TrendSparkline = ({ trend = [0] }) => {
+    if (trend.length < 2)
+      return <div className="w-12 h-1 bg-slate-200 rounded-full opacity-40" />;
+
+    const max = Math.max(...trend, 1);
+    const points = trend
+      .map((val, i) => {
+        const x = (i / (trend.length - 1)) * 48;
+        const y = 16 - (val / max) * 12 - 2; // Offset for stroke width
+        return `${x},${y}`;
+      })
+      .join(" ");
+
+    return (
+      <svg
+        width="48"
+        height="16"
+        viewBox="0 0 48 16"
+        className="overflow-visible"
+      >
+        <polyline
+          fill="none"
+          stroke="#3b82f6"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          points={points}
+        />
+      </svg>
+    );
+  };
+
+  const currentLineupKey = !isHistory ? [...court].sort().join("-") : "";
 
   const quarterData = getQuarterAppearances();
   const dynamicQuartersArray = Array.from({ length: quarter }, (_, i) => i + 1);
@@ -429,6 +478,77 @@ export default function StatsView({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {dynamicQuartersArray.map((q) => {
             const playersInQuarter = quarterData[q] || [];
+
+            const isPasarelle = q <= 3;
+
+            const renderPlayerRow = (id, start = QUARTER_SECONDS, end = 0) => {
+              const p = roster.find((r) => r.id === id);
+              if (!p) return null;
+              const qStats = getQuarterStats(id, q, start, end);
+              return (
+                <div
+                  key={`${q}-${id}`}
+                  className="bg-white border border-slate-200 px-3 py-2 rounded-lg flex items-center justify-between shadow-sm"
+                >
+                  <div className="flex items-center gap-2 truncate pr-2">
+                    <span className="text-xs font-black text-slate-400">
+                      #{p.jersey}
+                    </span>
+                    <span className="text-sm font-bold text-slate-800 truncate">
+                      {p.name}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 border-l border-slate-200 pl-3 shrink-0">
+                    <div className="flex flex-col items-center justify-center">
+                      <span className="text-[8px] font-black text-slate-400 uppercase leading-none">
+                        Min
+                      </span>
+                      <span className="text-sm font-black text-blue-600 leading-none mt-0.5">
+                        {qStats.qTime}
+                      </span>
+                    </div>
+                    <div className="flex flex-col items-center justify-center ml-1">
+                      <span className="text-[8px] font-black text-slate-400 uppercase leading-none">
+                        Pts
+                      </span>
+                      <span className="text-sm font-black text-slate-700 leading-none mt-0.5">
+                        {qStats.qPts}
+                      </span>
+                    </div>
+                    <div className="flex flex-col items-center justify-center ml-1">
+                      <span className="text-[8px] font-black text-slate-400 uppercase leading-none">
+                        TO
+                      </span>
+                      <span
+                        className={`text-sm font-black leading-none mt-0.5 ${qStats.qTOs > 0 ? "text-orange-500" : "text-slate-700"}`}
+                      >
+                        {qStats.qTOs}
+                      </span>
+                    </div>
+                    <div className="flex flex-col items-center justify-center ml-1">
+                      <span className="text-[8px] font-black text-slate-400 uppercase leading-none">
+                        Fls
+                      </span>
+                      <span
+                        className={`text-sm font-black leading-none mt-0.5 ${qStats.qFls > 0 ? "text-red-500" : "text-slate-700"}`}
+                      >
+                        {qStats.qFls}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            };
+
+            const firstHalfPlayers = playersInQuarter.filter((id) => {
+              const s = getQuarterStats(id, q, 600, 300);
+              return s.rawSecs > 0 || s.qPts > 0 || s.qFls > 0 || s.qTOs > 0;
+            });
+            const secondHalfPlayers = playersInQuarter.filter((id) => {
+              const s = getQuarterStats(id, q, 300, 0);
+              return s.rawSecs > 0 || s.qPts > 0 || s.qFls > 0 || s.qTOs > 0;
+            });
+
             return (
               <div
                 key={`qtr-${q}`}
@@ -442,75 +562,40 @@ export default function StatsView({
                     {playersInQuarter.length} Appeared
                   </span>
                 </div>
-
                 <div className="p-4 flex-1 bg-slate-50">
-                  {playersInQuarter.length > 0 ? (
-                    <div className="flex flex-col gap-2">
-                      {playersInQuarter.map((id) => {
-                        const p = roster.find((r) => r.id === id);
-                        if (!p) return null;
-                        const qStats = getQuarterStats(id, q);
-                        return (
-                          <div
-                            key={`${q}-${id}`}
-                            className="bg-white border border-slate-200 px-3 py-2 rounded-lg flex items-center justify-between shadow-sm"
-                          >
-                            <div className="flex items-center gap-2 truncate pr-2">
-                              <span className="text-xs font-black text-slate-400">
-                                #{p.jersey}
-                              </span>
-                              <span className="text-sm font-bold text-slate-800 truncate">
-                                {p.name}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2 border-l border-slate-200 pl-3 shrink-0">
-                              <div className="flex flex-col items-center justify-center">
-                                <span className="text-[8px] font-black text-slate-400 uppercase leading-none">
-                                  Min
-                                </span>
-                                <span className="text-sm font-black text-blue-600 leading-none mt-0.5">
-                                  {qStats.qTime}
-                                </span>
-                              </div>
-                              <div className="flex flex-col items-center justify-center ml-1">
-                                <span className="text-[8px] font-black text-slate-400 uppercase leading-none">
-                                  Pts
-                                </span>
-                                <span className="text-sm font-black text-slate-700 leading-none mt-0.5">
-                                  {qStats.qPts}
-                                </span>
-                              </div>
-                              <div className="flex flex-col items-center justify-center ml-1">
-                                <span className="text-[8px] font-black text-slate-400 uppercase leading-none">
-                                  TO
-                                </span>
-                                <span
-                                  className={`text-sm font-black leading-none mt-0.5 ${qStats.qTOs > 0 ? "text-orange-500" : "text-slate-700"}`}
-                                >
-                                  {qStats.qTOs}
-                                </span>
-                              </div>
-                              <div className="flex flex-col items-center justify-center ml-1">
-                                <span className="text-[8px] font-black text-slate-400 uppercase leading-none">
-                                  Fls
-                                </span>
-                                <span
-                                  className={`text-sm font-black leading-none mt-0.5 ${qStats.qFls > 0 ? "text-red-500" : "text-slate-700"}`}
-                                >
-                                  {qStats.qFls}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-400 py-6 opacity-50">
-                      <Target size={24} className="mb-2" />
-                      <p className="text-xs font-bold uppercase tracking-widest text-center">
+                  {playersInQuarter.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-400 py-6 opacity-50 text-center">
+                      <Target size={24} className="mb-2 mx-auto" />
+                      <p className="text-xs font-bold uppercase tracking-widest">
                         No Activity Recorded
                       </p>
+                    </div>
+                  ) : isPasarelle && !isHistory ? (
+                    <div className="space-y-4">
+                      <div>
+                        <div className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-2 border-b border-blue-100 pb-1">
+                          Segment 1 (10:00 - 5:00)
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          {firstHalfPlayers.map((id) =>
+                            renderPlayerRow(id, 600, 300),
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-2 border-b border-orange-100 pb-1">
+                          Segment 2 (5:00 - 0:00)
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          {secondHalfPlayers.map((id) =>
+                            renderPlayerRow(id, 300, 0),
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {playersInQuarter.map(renderPlayerRow)}
                     </div>
                   )}
                 </div>
@@ -617,54 +702,83 @@ export default function StatsView({
                 No 5-player lineups recorded yet.
               </div>
             ) : (
-              lineupStats.map((lineup, idx) => (
-                <div
-                  key={idx}
-                  className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between hover:bg-slate-50 transition-colors gap-2"
-                >
-                  <div className="flex flex-wrap gap-1">
-                    {lineup.players.map((p) => (
-                      <span
-                        key={p.id}
-                        className="bg-slate-100 text-slate-700 px-2 py-1 rounded-full text-xs font-bold"
-                      >
-                        #{p.jersey} {p.name}
-                      </span>
-                    ))}
+              lineupStats.map((lineup, idx) => {
+                const lineupKey = lineup.players
+                  .map((p) => p.id)
+                  .sort()
+                  .join("-");
+                const isCurrent = !isHistory && lineupKey === currentLineupKey;
+
+                return (
+                  <div
+                    key={idx}
+                    className={`p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between hover:bg-slate-50 transition-all gap-2 border-l-4 ${
+                      isCurrent
+                        ? "bg-blue-50/50 border-blue-500 shadow-sm"
+                        : "border-transparent"
+                    }`}
+                  >
+                    <div className="flex flex-col gap-1">
+                      {isCurrent && (
+                        <div className="flex items-center gap-1 text-[9px] font-black text-blue-600 uppercase tracking-widest mb-1">
+                          <Activity size={10} /> Active Now
+                        </div>
+                      )}
+                      <div className="flex flex-wrap gap-1">
+                        {lineup.players.map((p) => (
+                          <span
+                            key={p.id}
+                            className={`px-2 py-1 rounded-full text-xs font-bold ${
+                              isCurrent
+                                ? "bg-blue-600 text-white shadow-sm"
+                                : "bg-slate-100 text-slate-700"
+                            }`}
+                          >
+                            #{p.jersey} {p.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 shrink-0">
+                      <div className="flex flex-col items-center">
+                        <span className="text-[8px] font-black uppercase text-slate-400">
+                          Trend
+                        </span>
+                        <TrendSparkline trend={lineup.pointsTrend} />
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <span className="text-[8px] font-black uppercase text-slate-400">
+                          Time
+                        </span>
+                        <span className="text-sm font-black text-blue-600">
+                          {formatTime(lineup.totalTime)}
+                        </span>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <span className="text-[8px] font-black uppercase text-slate-400">
+                          Pts
+                        </span>
+                        <span className="text-sm font-black text-emerald-600">
+                          {lineup.pointsScored}
+                        </span>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <span className="text-[8px] font-black uppercase text-slate-400">
+                          Pts/Min
+                        </span>
+                        <span className="text-sm font-black text-slate-700">
+                          {lineup.totalTime > 0
+                            ? (
+                                lineup.pointsScored /
+                                (lineup.totalTime / 60)
+                              ).toFixed(1)
+                            : "0.0"}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-4 shrink-0">
-                    <div className="flex flex-col items-center">
-                      <span className="text-[8px] font-black uppercase text-slate-400">
-                        Time
-                      </span>
-                      <span className="text-sm font-black text-blue-600">
-                        {formatTime(lineup.totalTime)}
-                      </span>
-                    </div>
-                    <div className="flex flex-col items-center">
-                      <span className="text-[8px] font-black uppercase text-slate-400">
-                        Pts
-                      </span>
-                      <span className="text-sm font-black text-emerald-600">
-                        {lineup.pointsScored}
-                      </span>
-                    </div>
-                    <div className="flex flex-col items-center">
-                      <span className="text-[8px] font-black uppercase text-slate-400">
-                        Pts/Min
-                      </span>
-                      <span className="text-sm font-black text-slate-700">
-                        {lineup.totalTime > 0
-                          ? (
-                              lineup.pointsScored /
-                              (lineup.totalTime / 60)
-                            ).toFixed(1)
-                          : "0.0"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>

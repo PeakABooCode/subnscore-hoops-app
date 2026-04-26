@@ -38,6 +38,15 @@ export default function App() {
   });
   const [pendingSwapIds, setPendingSwapIds] = useState([]);
 
+  const [pasarelleTriggered, setPasarelleTriggered] = useState(() => {
+    try {
+      const saved = localStorage.getItem("subnscore_pasarelleTriggered");
+      return saved ? JSON.parse(saved) : { 1: false, 2: false, 3: false };
+    } catch {
+      return { 1: false, 2: false, 3: false };
+    }
+  });
+
   // State to hold a loaded historical game
   const [historyData, setHistoryData] = useState(() => {
     try {
@@ -220,6 +229,13 @@ export default function App() {
   }, [teamFouls]);
   useEffect(() => {
     if (!isLoaded.current) return;
+    localStorage.setItem(
+      "subnscore_pasarelleTriggered",
+      JSON.stringify(pasarelleTriggered),
+    );
+  }, [pasarelleTriggered]);
+  useEffect(() => {
+    if (!isLoaded.current) return;
     localStorage.setItem("subnscore_timeouts", JSON.stringify(timeouts));
   }, [timeouts]);
   useEffect(() => {
@@ -295,6 +311,24 @@ export default function App() {
       isLoaded.current = true;
     }, 100);
   }, []);
+
+  // --- Pasarelle Rule Monitor ---
+  useEffect(() => {
+    // 300 seconds is exactly 5:00 remaining
+    if (
+      isRunning &&
+      quarter <= 3 &&
+      clock === 300 &&
+      !pasarelleTriggered[quarter]
+    ) {
+      setIsRunning(false);
+      setPasarelleTriggered((prev) => ({ ...prev, [quarter]: true }));
+      showNotification(
+        "PASARELLE ALERT: Mandatory 5-Minute Unit Substitution!",
+      );
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    }
+  }, [clock, quarter, isRunning, pasarelleTriggered]);
 
   const showNotification = (msg) => {
     setNotification(msg);
@@ -421,6 +455,7 @@ export default function App() {
       localStorage.removeItem("subnscore_clock");
       localStorage.removeItem("subnscore_isRunning");
       localStorage.removeItem("subnscore_historyData");
+      localStorage.removeItem("subnscore_pasarelleTriggered");
 
       setUser(null);
       setView("AUTH");
@@ -692,6 +727,7 @@ export default function App() {
     setTeamFouls({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
     setTimeouts([]);
     setPendingSwapIds([]);
+    setPasarelleTriggered({ 1: false, 2: false, 3: false });
 
     localStorage.removeItem("subnscore_actionHistory");
     localStorage.removeItem("subnscore_playerStats");
@@ -704,6 +740,7 @@ export default function App() {
     localStorage.removeItem("subnscore_clock");
     localStorage.removeItem("subnscore_isRunning");
     localStorage.removeItem("subnscore_historyData");
+    localStorage.removeItem("subnscore_pasarelleTriggered");
 
     // 3. Go back to Setup View
     setView("SETUP");
@@ -1297,6 +1334,7 @@ export default function App() {
             teamMeta={historyData ? historyData.meta : teamMeta}
             quarter={historyData ? historyData.quarter : quarter}
             actionHistory={historyData ? historyData.actions : actionHistory}
+            court={historyData ? [] : court}
             resetGame={() => {
               if (historyData) {
                 setView("HISTORY");

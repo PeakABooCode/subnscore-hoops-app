@@ -73,11 +73,14 @@ export const calculateLineupStats = (
       .filter((s) => s.quarter === q)
       .forEach((stint) => {
         if (playerDetailsMap[stint.playerId]) {
+          // Add 'in' event
           quarterEvents.push({
             type: "in",
             playerId: stint.playerId,
             clock: stint.clockIn,
           });
+
+          // Add 'out' event based on state
           if (stint.clockOut !== null) {
             quarterEvents.push({
               type: "out",
@@ -85,22 +88,18 @@ export const calculateLineupStats = (
               clock: stint.clockOut,
             });
           } else if (q === currentQuarter) {
-            // For players currently on court in the active quarter, their "out" event is the current clock
             quarterEvents.push({
               type: "out",
               playerId: stint.playerId,
               clock: currentClock,
             });
           } else {
-            // If a player was on court at the end of a past quarter, their clockOut is 0
-            // Only add if they were actually on court for some duration in this quarter
-            if (stint.clockIn > 0) {
-              quarterEvents.push({
-                type: "out",
-                playerId: stint.playerId,
-                clock: 0,
-              });
-            }
+            // Past quarter boundary: player played until the buzzer
+            quarterEvents.push({
+              type: "out",
+              playerId: stint.playerId,
+              clock: 0,
+            });
           }
         }
       });
@@ -114,28 +113,11 @@ export const calculateLineupStats = (
 
     // Sort events: by clock (descending), then 'out' events before 'in' events for simultaneous changes
     quarterEvents.sort(
-      (a, b) => b.clock - a.clock || (a.type === "out" ? -1 : 1),
+      (a, b) => b.clock - a.clock || (a.type === "in" ? -1 : 1),
     );
 
-    // Initialize currentCourt based on who is on court at QUARTER_SECONDS
-    stints
-      .filter(
-        (s) =>
-          s.quarter === q &&
-          s.clockIn === QUARTER_SECONDS &&
-          (s.clockOut === null || s.clockOut < QUARTER_SECONDS),
-      )
-      .forEach((s) => {
-        currentCourt.add(s.playerId);
-      });
-    // If it's the current quarter and the game is live, also include players whose stints are still open
-    if (q === currentQuarter) {
-      stints
-        .filter((s) => s.quarter === q && s.clockOut === null)
-        .forEach((s) => {
-          currentCourt.add(s.playerId);
-        });
-    }
+    // The event loop below now handles initial court state automatically.
+    // Removing manual initialization to prevent carry-over 'ghost' players.
 
     for (const event of quarterEvents) {
       if (event.type === "quarter_start") {
@@ -154,53 +136,43 @@ export const calculateLineupStats = (
               .filter((p) => p), // Filter out any undefined players if playerMap is incomplete
             totalTime: 0,
             pointsScored: 0,
+            pointsTrend: [0], // Start every lineup trend at zero
           };
         }
         lineupStats[lineupKey].totalTime += duration;
 
         // Calculate points scored by our team during this stable interval
-        const pointsInInterval = actionHistory
-          .filter(
-            (a) =>
-              a.quarter === q &&
-              a.type === "score" &&
-              a.clock < lastClock &&
-              a.clock >= event.clock,
-          )
-          .reduce((sum, a) => sum + a.amount, 0);
-        lineupStats[lineupKey].pointsScored += pointsInInterval;
-      }
-
-      // Update the court state based on the event for the next interval
-      if (event.type === "in") currentCourt.add(event.playerId);
-      if (event.type === "out") currentCourt.delete(event.playerId);
-
-      lastClock = event.clock;
-    }
-
-    // After all events in the quarter, account for any remaining time in the last interval up to 0:00
-    if (lastClock > 0 && currentCourt.size === 5) {
-      const lineupKey = Array.from(currentCourt).sort().join("-");
-      if (!lineupStats[lineupKey]) {
-        lineupStats[lineupKey] = {
-          players: Array.from(currentCourt)
-            .map((id) => playerDetailsMap[id])
-            .filter((p) => p),
-          totalTime: 0,
-          pointsScored: 0,
-        };
-      }
-      lineupStats[lineupKey].totalTime += lastClock;
-      const pointsInInterval = actionHistory
-        .filter(
+        const intervalScores = actionHistory.filter(
           (a) =>
             a.quarter === q &&
             a.type === "score" &&
             a.clock < lastClock &&
-            a.clock >= 0,
-        )
-        .reduce((sum, a) => sum + a.amount, 0);
-      lineupStats[lineupKey].pointsScored += pointsInInterval;
+            a.clock >= event.clock,
+        );
+
+        // Sort scores chronologically within the interval (clock descending)
+        intervalScores.sort((a, b) => b.clock - a.clock);
+
+        const pointsInInterval = intervalScores.reduce(
+          (sum, a) => sum + a.amount,
+          0,
+        );
+        lineupStats[lineupKey].pointsScored += pointsInInterval;
+
+        // Add each scoring event to the trend line
+        intervalScores.forEach((s) => {
+          const lastVal =
+            lineupStats[lineupKey].pointsTrend[
+              lineupStats[lineupKey].pointsTrend.length - 1
+            ];
+          lineupStats[lineupKey].pointsTrend.push(lastVal + s.amount);
+        });
+      }
+
+      if (event.type === "in") currentCourt.add(event.playerId);
+      if (event.type === "out") currentCourt.delete(event.playerId);
+
+      lastClock = event.clock;
     }
   }
 
