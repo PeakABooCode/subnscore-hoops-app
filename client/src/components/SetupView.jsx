@@ -9,6 +9,8 @@ import {
   CloudDownload,
   Save,
   List,
+  ShieldCheck,
+  Zap,
 } from "lucide-react";
 import EditPlayerModal from "./EditPlayerModal";
 import { capitalizeWords } from "../utils/helpers";
@@ -31,6 +33,8 @@ export default function SetupView({
   gameInProgress, // New prop
   handleLoadRoster,
   availableTeams = [],
+  gameMode, // Passed from App.jsx
+  setGameMode, // Passed from App.jsx
 }) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [playerToEdit, setPlayerToEdit] = useState(null);
@@ -197,6 +201,89 @@ export default function SetupView({
                 });
               }}
             />
+          </div>
+        </div>
+      </div>
+
+      {/* SECTION 2: RULE CONFIGURATION */}
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <h2 className="text-xl font-bold mb-4 text-slate-800 flex items-center gap-2">
+          <ShieldCheck className="text-blue-600" size={20} /> Rule Configuration
+        </h2>
+
+        <div className="space-y-3">
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+            Select Game Format:
+          </p>
+          <div className="grid grid-cols-1 gap-2">
+            <button
+              onClick={() => setGameMode("FULL")}
+              className={`p-4 rounded-xl border-2 text-left transition-all flex items-center justify-between ${
+                gameMode === "FULL"
+                  ? "border-blue-500 bg-blue-50"
+                  : "border-slate-100 hover:border-slate-200"
+              }`}
+            >
+              <div className="min-w-0">
+                <div
+                  className={`font-black uppercase text-sm ${gameMode === "FULL" ? "text-blue-700" : "text-slate-700"}`}
+                >
+                  Full Pasarelle
+                </div>
+                <div className="text-[10px] text-slate-500 font-bold">
+                  Auto-pause at 5:00 for Q1, Q2, and Q3.
+                </div>
+              </div>
+              {gameMode === "FULL" && (
+                <Zap size={20} className="text-blue-500 fill-blue-500" />
+              )}
+            </button>
+
+            <button
+              onClick={() => setGameMode("HALF")}
+              className={`p-4 rounded-xl border-2 text-left transition-all flex items-center justify-between ${
+                gameMode === "HALF"
+                  ? "border-blue-500 bg-blue-50"
+                  : "border-slate-100 hover:border-slate-200"
+              }`}
+            >
+              <div className="min-w-0">
+                <div
+                  className={`font-black uppercase text-sm ${gameMode === "HALF" ? "text-blue-700" : "text-slate-700"}`}
+                >
+                  Half Pasarelle
+                </div>
+                <div className="text-[10px] text-slate-500 font-bold">
+                  Auto-pause at 5:00 for Q1 and Q2 only.
+                </div>
+              </div>
+              {gameMode === "HALF" && (
+                <Zap size={20} className="text-blue-500 fill-blue-500" />
+              )}
+            </button>
+
+            <button
+              onClick={() => setGameMode("OPEN")}
+              className={`p-4 rounded-xl border-2 text-left transition-all flex items-center justify-between ${
+                gameMode === "OPEN"
+                  ? "border-blue-500 bg-blue-50"
+                  : "border-slate-100 hover:border-slate-200"
+              }`}
+            >
+              <div className="min-w-0">
+                <div
+                  className={`font-black uppercase text-sm ${gameMode === "OPEN" ? "text-blue-700" : "text-slate-700"}`}
+                >
+                  Standard / Open
+                </div>
+                <div className="text-[10px] text-slate-500 font-bold">
+                  No automatic pauses. Quarters run full duration.
+                </div>
+              </div>
+              {gameMode === "OPEN" && (
+                <Zap size={20} className="text-blue-500 fill-blue-500" />
+              )}
+            </button>
           </div>
         </div>
       </div>

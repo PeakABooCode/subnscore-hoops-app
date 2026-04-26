@@ -38,6 +38,10 @@ export default function App() {
   });
   const [pendingSwapIds, setPendingSwapIds] = useState([]);
 
+  const [gameMode, setGameMode] = useState(() => {
+    return localStorage.getItem("subnscore_gameMode") || "FULL"; // FULL, HALF, OPEN
+  });
+
   const [pasarelleTriggered, setPasarelleTriggered] = useState(() => {
     try {
       const saved = localStorage.getItem("subnscore_pasarelleTriggered");
@@ -225,6 +229,10 @@ export default function App() {
   }, [stints]);
   useEffect(() => {
     if (!isLoaded.current) return;
+    localStorage.setItem("subnscore_gameMode", gameMode);
+  }, [gameMode]);
+  useEffect(() => {
+    if (!isLoaded.current) return;
     localStorage.setItem("subnscore_teamFouls", JSON.stringify(teamFouls));
   }, [teamFouls]);
   useEffect(() => {
@@ -311,6 +319,23 @@ export default function App() {
       isLoaded.current = true;
     }, 100);
   }, []);
+
+  // --- Pasarelle Rule Automation Logic ---
+  useEffect(() => {
+    // Only check if clock is running and hits exactly 5:00 (300 seconds)
+    if (!isRunning || clock !== 300) return;
+
+    const isPasarelleActive =
+      (gameMode === "FULL" && quarter <= 3) ||
+      (gameMode === "HALF" && quarter <= 2);
+
+    if (isPasarelleActive && !pasarelleTriggered[quarter]) {
+      setIsRunning(false);
+      setPasarelleTriggered((prev) => ({ ...prev, [quarter]: true }));
+      showNotification("PASARELLE BREAK: Mandatory Substitutions Required");
+      if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
+    }
+  }, [clock, isRunning, quarter, gameMode, pasarelleTriggered]);
 
   const showNotification = (msg) => {
     setNotification(msg);
@@ -739,6 +764,18 @@ export default function App() {
     if (isAlreadySelected) {
       nextSelected = pendingSwapIds.filter((id) => id !== playerId);
     } else {
+      const isOnCourt = court.includes(playerId);
+      const currentOnCourt = pendingSwapIds.filter((id) => court.includes(id));
+      const currentOnBench = pendingSwapIds.filter((id) => !court.includes(id));
+
+      if (isOnCourt && currentOnCourt.length >= 5) {
+        showNotification("Already selected 5 players from the court.");
+        return;
+      }
+      if (!isOnCourt && currentOnBench.length >= 5) {
+        showNotification("Already selected 5 players from the bench.");
+        return;
+      }
       nextSelected = [...pendingSwapIds, playerId];
     }
 
@@ -1294,6 +1331,8 @@ export default function App() {
             handleSaveRoster={handleSaveRoster}
             handleLoadRoster={handleLoadRoster}
             availableTeams={availableTeams}
+            gameMode={gameMode}
+            setGameMode={setGameMode}
           />
         )}
 
