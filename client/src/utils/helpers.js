@@ -136,6 +136,9 @@ export const calculateLineupStats = (
               .filter((p) => p), // Filter out any undefined players if playerMap is incomplete
             totalTime: 0,
             pointsScored: 0,
+            pointsAgainst: 0,
+            turnovers: 0,
+            fouls: 0,
             pointsTrend: [0], // Start every lineup trend at zero
           };
         }
@@ -158,6 +161,37 @@ export const calculateLineupStats = (
           0,
         );
         lineupStats[lineupKey].pointsScored += pointsInInterval;
+
+        // Calculate points against during this interval
+        const pointsAgainstInInterval = actionHistory
+          .filter(
+            (a) =>
+              a.quarter === q &&
+              a.type === "opp_score" &&
+              a.clock < lastClock &&
+              a.clock >= event.clock,
+          )
+          .reduce((sum, a) => sum + a.amount, 0);
+        lineupStats[lineupKey].pointsAgainst += pointsAgainstInInterval;
+
+        // Calculate Turnovers and Fouls for this interval
+        const intervalTOs = actionHistory.filter(
+          (a) =>
+            a.quarter === q &&
+            a.type === "turnovers" &&
+            a.clock < lastClock &&
+            a.clock >= event.clock,
+        ).length;
+        const intervalFouls = actionHistory.filter(
+          (a) =>
+            a.quarter === q &&
+            a.type === "fouls" &&
+            a.clock < lastClock &&
+            a.clock >= event.clock,
+        ).length;
+
+        lineupStats[lineupKey].turnovers += intervalTOs;
+        lineupStats[lineupKey].fouls += intervalFouls;
 
         // Add each scoring event to the trend line
         intervalScores.forEach((s) => {

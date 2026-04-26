@@ -850,6 +850,13 @@ export default function App() {
     ]);
   };
 
+  const addOpponentScore = (amount) => {
+    setActionHistory((prev) => [
+      ...prev,
+      { type: "opp_score", amount, quarter, clock },
+    ]);
+  };
+
   const undoLastAction = () => {
     if (actionHistory.length === 0) return;
     const historyCopy = [...actionHistory];
@@ -857,6 +864,8 @@ export default function App() {
 
     if (lastAction.type === "TIMEOUT") {
       setTimeouts((prev) => prev.slice(0, -1));
+    } else if (lastAction.type === "opp_score") {
+      // No additional state to revert
     } else if (lastAction.playerId) {
       setPlayerStats((prev) => ({
         ...prev,
@@ -926,6 +935,11 @@ export default function App() {
           (t) => !(t.quarter === action.quarter && t.clock === action.clock),
         ),
       );
+    }
+
+    // Handle Opponent Score Reversion
+    if (action.type === "opp_score") {
+      // Removal from history is handled by default logic below
     }
 
     // 4. Remove from action history array
@@ -1172,8 +1186,13 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col relative">
       {notification && (
-        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[9999] bg-slate-800 text-white px-6 py-3 rounded-full shadow-2xl border border-slate-700 animate-bounce">
-          {notification}
+        <div className="fixed top-4 left-0 right-0 flex justify-center z-[10001] pointer-events-none px-4">
+          <div className="bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl border border-slate-700 animate-bounce pointer-events-auto flex items-center gap-3">
+            <Activity size={18} className="text-amber-400" />
+            <span className="font-black uppercase tracking-widest text-xs md:text-sm">
+              {notification}
+            </span>
+          </div>
         </div>
       )}
 
@@ -1322,6 +1341,9 @@ export default function App() {
             handleSwap={handleSwap}
             pendingSwapIds={pendingSwapIds}
             playerTimes={playerTimes}
+            addOpponentScore={addOpponentScore}
+            actionHistory={actionHistory}
+            showNotification={showNotification}
           />
         )}
 

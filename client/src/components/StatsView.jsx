@@ -33,6 +33,7 @@ export default function StatsView({
   historyQuarterStats, // New prop for pre-calculated quarter data
 }) {
   const [activeTab, setActiveTab] = useState("boxscore"); // boxscore, quarters, timeline
+  const [lineupSortBy, setLineupSortBy] = useState("eff"); // eff, pts, time, to, fls, pm
 
   // --- Calculations ---
   const teamTotalScore = Object.values(playerStats).reduce(
@@ -179,6 +180,33 @@ export default function StatsView({
     quarter,
     clock,
   );
+
+  // Advanced sorting logic for lineups
+  const sortedLineups = [...lineupStats].sort((a, b) => {
+    const getEff = (l) => l.pointsScored - (l.turnovers || 0);
+
+    switch (lineupSortBy) {
+      case "pts":
+        return b.pointsScored - a.pointsScored || b.totalTime - a.totalTime;
+      case "pm":
+        return (
+          b.pointsScored -
+          (b.pointsAgainst || 0) -
+          (a.pointsScored - (a.pointsAgainst || 0))
+        );
+      case "time":
+        return b.totalTime - a.totalTime || b.pointsScored - a.pointsScored;
+      case "to":
+        return (b.turnovers || 0) - (a.turnovers || 0);
+      case "fls":
+        return (b.fouls || 0) - (a.fouls || 0);
+      case "eff":
+      default:
+        const effA = getEff(a);
+        const effB = getEff(b);
+        return effB - effA || b.pointsScored - a.pointsScored;
+    }
+  });
 
   // Simple visual trend component
   const TrendSparkline = ({ trend = [0] }) => {
@@ -595,7 +623,7 @@ export default function StatsView({
                     </div>
                   ) : (
                     <div className="flex flex-col gap-2">
-                      {playersInQuarter.map(renderPlayerRow)}
+                      {playersInQuarter.map((id) => renderPlayerRow(id))}
                     </div>
                   )}
                 </div>
@@ -635,7 +663,11 @@ export default function StatsView({
                           {formatTime(action.clock)}
                         </span>
                         <span className="text-sm font-bold text-slate-800">
-                          {p ? `${p.name} (#${p.jersey})` : "Unknown Player"}
+                          {action.type === "opp_score"
+                            ? `${teamMeta.opponent || "Opponent"} Score`
+                            : p
+                              ? `${p.name} (#${p.jersey})`
+                              : "Unknown Player"}
                         </span>
                       </div>
                     </div>
@@ -644,25 +676,30 @@ export default function StatsView({
                         className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
                           action.type === "score"
                             ? "bg-emerald-100 text-emerald-700"
-                            : action.type === "fouls"
-                              ? "bg-red-100 text-red-700"
-                              : action.type === "turnovers"
-                                ? "bg-orange-100 text-orange-700"
-                                : "bg-slate-100 text-slate-700"
+                            : action.type === "opp_score"
+                              ? "bg-slate-900 text-slate-100"
+                              : action.type === "fouls"
+                                ? "bg-red-100 text-red-700"
+                                : action.type === "turnovers"
+                                  ? "bg-orange-100 text-orange-700"
+                                  : "bg-slate-100 text-slate-700"
                         }`}
                       >
                         {action.type === "score"
                           ? `+${action.amount} Points`
-                          : action.type === "fouls"
-                            ? "Foul"
-                            : action.type === "turnovers"
-                              ? "Turnover"
-                              : action.type}
+                          : action.type === "opp_score"
+                            ? `Opp +${action.amount}`
+                            : action.type === "fouls"
+                              ? "Foul"
+                              : action.type === "turnovers"
+                                ? "Turnover"
+                                : action.type}
                       </span>
 
                       {/* Selective Deletion: Hide for substitutions and historical archives */}
                       {!isHistory &&
                         (action.type === "score" ||
+                          action.type === "opp_score" ||
                           action.type === "fouls" ||
                           action.type === "turnovers" ||
                           action.type === "TIMEOUT") && (
@@ -692,17 +729,43 @@ export default function StatsView({
       {activeTab === "lineups" && (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="bg-slate-50 px-5 py-4 border-b border-slate-200">
-            <h3 className="font-black text-slate-800 flex items-center gap-2 uppercase tracking-wider text-sm">
-              <Group size={18} className="text-blue-600" /> Lineup Analysis
-            </h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <h3 className="font-black text-slate-800 flex items-center gap-2 uppercase tracking-wider text-sm">
+                <Group size={18} className="text-blue-600" /> Lineup Analysis
+              </h3>
+
+              {/* Quick Sort Buttons */}
+              <div className="flex bg-white border border-slate-200 p-1 rounded-lg shadow-sm overflow-x-auto no-scrollbar">
+                {[
+                  { id: "eff", label: "Most EFF" },
+                  { id: "pm", label: "+/-" },
+                  { id: "pts", label: "PTS" },
+                  { id: "time", label: "TIME" },
+                  { id: "to", label: "TO" },
+                  { id: "fls", label: "FLS" },
+                ].map((sort) => (
+                  <button
+                    key={sort.id}
+                    onClick={() => setLineupSortBy(sort.id)}
+                    className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-tight transition-all whitespace-nowrap ${
+                      lineupSortBy === sort.id
+                        ? "bg-blue-600 text-white shadow-md"
+                        : "text-slate-500 hover:bg-slate-100"
+                    }`}
+                  >
+                    {sort.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
           <div className="divide-y divide-slate-100 max-h-[60vh] overflow-y-auto">
-            {lineupStats.length === 0 ? (
+            {sortedLineups.length === 0 ? (
               <div className="p-10 text-center text-slate-400 font-bold">
                 No 5-player lineups recorded yet.
               </div>
             ) : (
-              lineupStats.map((lineup, idx) => {
+              sortedLineups.map((lineup, idx) => {
                 const lineupKey = lineup.players
                   .map((p) => p.id)
                   .sort()
@@ -748,6 +811,19 @@ export default function StatsView({
                       </div>
                       <div className="flex flex-col items-center">
                         <span className="text-[8px] font-black uppercase text-slate-400">
+                          +/-
+                        </span>
+                        <span
+                          className={`text-sm font-black ${lineup.pointsScored - (lineup.pointsAgainst || 0) > 0 ? "text-emerald-600" : lineup.pointsScored - (lineup.pointsAgainst || 0) < 0 ? "text-red-600" : "text-slate-400"}`}
+                        >
+                          {lineup.pointsScored - (lineup.pointsAgainst || 0) > 0
+                            ? "+"
+                            : ""}
+                          {lineup.pointsScored - (lineup.pointsAgainst || 0)}
+                        </span>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <span className="text-[8px] font-black uppercase text-slate-400">
                           Time
                         </span>
                         <span className="text-sm font-black text-blue-600">
@@ -760,6 +836,26 @@ export default function StatsView({
                         </span>
                         <span className="text-sm font-black text-emerald-600">
                           {lineup.pointsScored}
+                        </span>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <span className="text-[8px] font-black uppercase text-slate-400">
+                          TO
+                        </span>
+                        <span
+                          className={`text-sm font-black ${lineup.turnovers > 0 ? "text-orange-500" : "text-slate-400"}`}
+                        >
+                          {lineup.turnovers || 0}
+                        </span>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <span className="text-[8px] font-black uppercase text-slate-400">
+                          Fls
+                        </span>
+                        <span
+                          className={`text-sm font-black ${lineup.fouls > 0 ? "text-red-500" : "text-slate-400"}`}
+                        >
+                          {lineup.fouls || 0}
                         </span>
                       </div>
                       <div className="flex flex-col items-center">

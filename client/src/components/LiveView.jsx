@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   Play,
   Pause,
@@ -8,6 +8,7 @@ import {
   Activity,
   History,
   Clock,
+  TrendingUp,
 } from "lucide-react";
 import { formatTime } from "../utils/helpers";
 
@@ -29,11 +30,47 @@ export default function LiveView({
   handleSwap,
   pendingSwapIds,
   playerTimes,
+  addOpponentScore,
+  actionHistory = [],
 }) {
   const teamTotalScore = Object.values(playerStats).reduce(
     (acc, curr) => acc + (curr.score || 0),
     0,
   );
+
+  const opponentScore = actionHistory
+    .filter((a) => a.type === "opp_score")
+    .reduce((acc, curr) => acc + (curr.amount || 0), 0);
+
+  // --- MOMENTUM CALCULATION ---
+  const currentRun = useMemo(() => {
+    let runPoints = 0;
+    let runType = null; // 'us' or 'them'
+
+    // Walk backwards through history to find the current unanswered run
+    for (let i = actionHistory.length - 1; i >= 0; i--) {
+      const action = actionHistory[i];
+      if (action.type === "score") {
+        if (runType === null) runType = "us";
+        if (runType === "us") {
+          runPoints += action.amount;
+        } else {
+          break; // Run broken by opponent
+        }
+      } else if (action.type === "opp_score") {
+        if (runType === null) runType = "them";
+        if (runType === "them") {
+          runPoints += action.amount;
+        } else {
+          break; // Run broken by us
+        }
+      }
+    }
+    // Standard basketball logic: only highlight runs of 4+ points
+    return runType && runPoints >= 4
+      ? { type: runType, points: runPoints }
+      : null;
+  }, [actionHistory]);
 
   // --- DYNAMIC PERIOD NAMING ---
   const periodName =
@@ -44,54 +81,96 @@ export default function LiveView({
 
   return (
     <div className="max-w-6xl mx-auto space-y-4 pb-24 px-2 lg:px-6">
-      {/* 1. ADAPTIVE HEADER (Scores & Clock) */}
-      <div className="bg-slate-900 text-white p-4 md:p-6 rounded-2xl shadow-xl border-b-4 border-amber-500 sticky top-16 z-30 transition-all duration-300">
-        <div className="flex flex-row justify-between items-center gap-2 md:gap-6">
-          {/* Team Info */}
-          <div className="flex flex-col min-w-0">
-            <span className="text-[10px] md:text-xs font-black text-amber-500 uppercase tracking-widest truncate">
-              {teamMeta.teamName || "HOME TEAM"}
-            </span>
-            <div className="flex items-center gap-2">
-              <Activity size={20} className="text-amber-400 hidden sm:block" />
+      {/* 1. ADAPTIVE HEADER (Scoreboard & Sticky Controls) */}
+      <div className="bg-slate-900 text-white p-3 md:p-5 rounded-2xl shadow-xl border-b-4 border-amber-500 sticky top-16 z-30 transition-all duration-300">
+        <div className="flex flex-col gap-3">
+          {/* Row 1: Scoreboard */}
+          <div className="grid grid-cols-3 items-center gap-2">
+            {/* Home Team */}
+            <div className="flex flex-col items-center md:items-start min-w-0">
+              <span className="text-[9px] md:text-[11px] font-black text-amber-500 uppercase tracking-widest truncate w-full text-center md:text-left">
+                {teamMeta.teamName || "HOME"}
+              </span>
               <span className="text-3xl md:text-5xl font-black">
                 {teamTotalScore}
               </span>
-            </div>
-          </div>
-
-          {/* Center Clock */}
-          <div className="flex flex-col items-center bg-slate-800 px-4 py-1 md:px-8 md:py-2 rounded-xl border border-slate-700">
-            <div className="text-2xl md:text-5xl font-mono font-black tabular-nums">
-              {formatTime(clock)}
-            </div>
-            <div className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-tighter">
-              {periodName}
-            </div>
-          </div>
-
-          {/* Main Controls */}
-          <div className="flex gap-2">
-            <button
-              title="Start/Pause"
-              onClick={() => setIsRunning(!isRunning)}
-              className={`p-3 md:p-5 rounded-full transition-all shadow-lg active:scale-95 ${
-                isRunning ? "bg-red-500" : "bg-emerald-500"
-              }`}
-            >
-              {isRunning ? (
-                <Pause size={20} fill="white" />
-              ) : (
-                <Play size={20} fill="white" />
+              {currentRun?.type === "us" && (
+                <span className="text-[9px] md:text-xs font-black text-emerald-400 animate-pulse bg-emerald-400/10 px-2 py-0.5 rounded-full mt-1 flex items-center gap-1 shadow-sm border border-emerald-400/20">
+                  <TrendingUp size={10} /> {currentRun.points}-0 RUN
+                </span>
               )}
-            </button>
-            <button
-              title="Next Quarter"
-              onClick={() => advanceQuarter()} // Trigger the modal
-              className="hidden md:flex p-5 bg-slate-700 hover:bg-slate-600 rounded-full border border-slate-600 active:scale-95"
-            >
-              <RotateCcw size={20} />
-            </button>
+            </div>
+
+            {/* Center Clock */}
+            <div className="flex flex-col items-center bg-slate-800 py-1 md:py-2 rounded-xl border border-slate-700">
+              <div className="text-2xl md:text-4xl font-mono font-black tabular-nums leading-tight">
+                {formatTime(clock)}
+              </div>
+              <div className="text-[8px] md:text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                {periodName}
+              </div>
+            </div>
+
+            {/* Opponent Team */}
+            <div className="flex flex-col items-center md:items-end min-w-0">
+              <span className="text-[9px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest truncate w-full text-center md:text-right">
+                {teamMeta.opponent || "AWAY"}
+              </span>
+              <span className="text-3xl md:text-5xl font-black text-slate-300">
+                {opponentScore}
+              </span>
+              {currentRun?.type === "them" && (
+                <span className="text-[9px] md:text-xs font-black text-red-400 animate-pulse bg-red-400/10 px-2 py-0.5 rounded-full mt-1 flex items-center gap-1 shadow-sm border border-red-400/20">
+                  <TrendingUp size={10} className="rotate-90" />{" "}
+                  {currentRun.points}-0 RUN
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Row 2: Real-time Controls */}
+          <div className="flex items-center justify-between pt-2 border-t border-slate-800 gap-2">
+            <div className="flex gap-2">
+              <button
+                title={isRunning ? "Pause Clock" : "Start Clock"}
+                onClick={() => setIsRunning(!isRunning)}
+                className={`h-10 px-4 md:px-6 rounded-xl transition-all shadow-lg active:scale-95 flex items-center gap-2 ${
+                  isRunning ? "bg-red-500" : "bg-emerald-500"
+                }`}
+              >
+                {isRunning ? (
+                  <Pause size={16} fill="white" />
+                ) : (
+                  <Play size={16} fill="white" />
+                )}
+                <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">
+                  {isRunning ? "Pause" : "Start"}
+                </span>
+              </button>
+              <button
+                title="Next Quarter"
+                onClick={() => advanceQuarter()}
+                className="h-10 w-10 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 active:scale-95"
+              >
+                <RotateCcw size={16} />
+              </button>
+            </div>
+
+            {/* Quick Opponent Entry Buttons */}
+            <div className="flex items-center gap-1 bg-slate-800/40 p-1 rounded-xl">
+              <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest px-2 hidden lg:block">
+                Record Opponent Score:
+              </span>
+              {[1, 2, 3].map((val) => (
+                <button
+                  key={val}
+                  onClick={() => addOpponentScore(val)}
+                  className="h-10 w-10 bg-slate-700 hover:bg-slate-600 active:bg-blue-900 rounded-lg font-black text-xs transition-all border border-slate-600"
+                >
+                  +{val}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
