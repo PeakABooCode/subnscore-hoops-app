@@ -1,11 +1,12 @@
 import React from "react";
-import { X, Users } from "lucide-react";
+import { X, Search, ChevronRight, Trophy, Users } from "lucide-react";
 
 export default function TeamSelectionModal({
   isOpen,
   onClose,
   teams,
   onSelect,
+  userRole,
 }) {
   if (!isOpen) return null;
 
@@ -39,7 +40,7 @@ export default function TeamSelectionModal({
                 </div>
                 <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
                   <span className="truncate">
-                    {t.league || "General League"}
+                    {t.league || "General League"} • {t.division || "N/A"}
                   </span>
                   <span>•</span>
                   <span>Season {t.season || "N/A"}</span>

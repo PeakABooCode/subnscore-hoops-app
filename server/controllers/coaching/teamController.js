@@ -1,7 +1,7 @@
 import pool from "../../config/db.js";
 
 export const saveRoster = async (req, res) => {
-  const { teamName, roster, league, season } = req.body;
+  const { teamName, roster, league, season, division } = req.body;
   let coachId;
   try {
     coachId = req.user.id; // Ensure coachId is defined within the try block
@@ -18,13 +18,13 @@ export const saveRoster = async (req, res) => {
       teamId = teamRes.rows[0].id;
       // Update metadata and timestamp
       await pool.query(
-        "UPDATE teams SET league = $1, season = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3",
-        [league, season, teamId],
+        "UPDATE teams SET league = $1, season = $2, division = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4",
+        [league, season, division, teamId],
       );
     } else {
       const newTeam = await pool.query(
-        "INSERT INTO teams (coach_id, name, league, season) VALUES ($1, $2, $3, $4) RETURNING id",
-        [coachId, teamName, league, season],
+        "INSERT INTO teams (coach_id, name, league, season, division) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+        [coachId, teamName, league, season, division],
       );
       teamId = newTeam.rows[0].id;
     }
@@ -89,16 +89,29 @@ export const saveRoster = async (req, res) => {
 
 export const getTeamRoster = async (req, res) => {
   const { name } = req.params;
-  let coachId;
+  const user = req.user;
   try {
-    coachId = req.user.id; // Ensure coachId is defined within the try block
-    const result = await pool.query(
-      `SELECT p.id, p.name, p.jersey_number as jersey 
-       FROM players p 
-       JOIN teams t ON p.team_id = t.id 
-       WHERE t.coach_id = $1 AND t.name = $2`,
-      [coachId, name],
-    );
+    let result;
+
+    if (user.role === "COMMITTEE") {
+      // Committee members ONLY search their own official_players and official_teams
+      result = await pool.query(
+        `SELECT p.id, p.name, p.jersey_number as jersey
+         FROM official_players p
+         JOIN official_teams t ON p.team_id = t.id
+         WHERE t.official_id = $1 AND t.name = $2`,
+        [user.id, name]
+      );
+    } else {
+      result = await pool.query(
+        `SELECT p.id, p.name, p.jersey_number as jersey
+         FROM players p
+         JOIN teams t ON p.team_id = t.id
+         WHERE t.coach_id = $1 AND t.name = $2`,
+        [user.id, name],
+      );
+    }
+
     res.json(result.rows);
   } catch (err) {
     console.error("Fetch Roster Error:", err);
@@ -108,14 +121,28 @@ export const getTeamRoster = async (req, res) => {
 
 export const getCoachTeams = async (req, res) => {
   try {
-    const coachId = req.user.id;
-    const result = await pool.query(
-      `SELECT name, league, season, updated_at 
-       FROM teams 
-       WHERE coach_id = $1 
-       ORDER BY updated_at DESC`,
-      [coachId],
-    );
+    const user = req.user;
+    let result;
+
+    if (user.role === "COMMITTEE") {
+      // Committee members ONLY search their own previously created official teams
+      result = await pool.query(
+        `SELECT id, name, league, season, division, updated_at, official_id
+         FROM official_teams
+         WHERE official_id = $1
+         ORDER BY updated_at DESC`,
+        [user.id]
+      );
+    } else {
+      result = await pool.query(
+        `SELECT id, name, league, season, division, updated_at 
+         FROM teams 
+         WHERE coach_id = $1 
+         ORDER BY updated_at DESC`,
+        [user.id],
+      );
+    }
+
     res.json(result.rows);
   } catch (err) {
     console.error("Fetch Teams Error:", err);

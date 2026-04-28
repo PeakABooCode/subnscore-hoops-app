@@ -10,7 +10,9 @@ import {
   ClipboardCheck,
   Search,
   ChevronRight,
+  List,
 } from "lucide-react";
+import TeamSelectionModal from "../common/TeamSelectionModal";
 
 export default function CommitteeDashboardView({
   user,
@@ -20,6 +22,8 @@ export default function CommitteeDashboardView({
 }) {
   const [league, setLeague] = useState("");
   const [season, setSeason] = useState("");
+  const [division, setDivision] = useState("");
+  const [setupAttempted, setSetupAttempted] = useState(false);
 
   // Separate state for Team A and Team B
   const [teamA, setTeamA] = useState({ name: "", roster: [] });
@@ -48,6 +52,7 @@ export default function CommitteeDashboardView({
       }
       if (!league && team.league) setLeague(team.league);
       if (!season && team.season) setSeason(team.season);
+      if (!division && team.division) setDivision(team.division); // Populate division
       showNotification(`Loaded roster for ${team.name}`);
     } catch (err) {
       showNotification("Failed to load team roster.");
@@ -91,7 +96,8 @@ export default function CommitteeDashboardView({
   };
 
   const initializeGame = async () => {
-    if (!league || !season || !teamA.name || !teamB.name) {
+    setSetupAttempted(true);
+    if (!league || !season || !division || !teamA.name || !teamB.name) {
       return showNotification("Missing tournament or team details.");
     }
     if (teamA.roster.length < 5 || teamB.roster.length < 5) {
@@ -106,6 +112,7 @@ export default function CommitteeDashboardView({
         teamBRoster: teamB.roster,
         league,
         season,
+        division,
       };
 
       const res = await axios.post("/api/committee/games/init", payload);
@@ -128,7 +135,7 @@ export default function CommitteeDashboardView({
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       {/* League Info Header */}
-      <div className="bg-slate-900 text-white p-6 rounded-3xl shadow-xl border-b-4 border-amber-500 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div className="bg-slate-900 text-white p-6 rounded-3xl shadow-xl border-b-4 border-amber-500 flex items-center gap-4">
         <div className="flex items-center gap-3">
           <div className="bg-amber-500 p-2 rounded-xl">
             <ClipboardCheck size={28} className="text-slate-900" />
@@ -142,31 +149,70 @@ export default function CommitteeDashboardView({
             </p>
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full md:w-auto">
-          <div className="relative group">
-            <Trophy
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
-              size={16}
-            />
-            <input
-              className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-xl outline-none focus:border-amber-500 text-sm font-bold transition-all"
-              placeholder="League Name"
-              value={league}
-              onChange={(e) => setLeague(e.target.value)}
-            />
+      </div>
+
+      {/* Tournament Details Section */}
+      <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
+        <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight flex items-center gap-3 mb-6">
+          <Trophy className="text-amber-500" size={24} />
+          Tournament Details
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black uppercase text-slate-500 ml-1">
+              League Name {setupAttempted && !league && <span className="text-red-500">*</span>}
+            </label>
+            <div className="relative">
+              <Trophy className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input
+                className={`w-full pl-12 pr-4 py-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold transition-all ${
+                  setupAttempted && !league
+                    ? "border-red-500 bg-red-50 ring-4 ring-red-100"
+                    : "border-slate-200 focus:ring-4 focus:ring-slate-100"
+                }`}
+                placeholder="e.g. NBA"
+                value={league}
+                onChange={(e) => setLeague(e.target.value)}
+              />
+            </div>
           </div>
-          <div className="relative group">
-            <Calendar
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
-              size={16}
-            />
-            <input
-              className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-xl outline-none focus:border-amber-500 text-sm font-bold transition-all"
-              placeholder="Season/Phase"
-              value={season}
-              onChange={(e) => setSeason(e.target.value)}
-            />
+              <div className="space-y-1.5">
+            <label className="text-[10px] font-black uppercase text-slate-500 ml-1">
+              Division {setupAttempted && !division && <span className="text-red-500">*</span>}
+            </label>
+            <div className="relative">
+              <Users className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input
+                className={`w-full pl-12 pr-4 py-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold transition-all ${
+                  setupAttempted && !division
+                    ? "border-red-500 bg-red-50 ring-4 ring-red-100"
+                    : "border-slate-200 focus:ring-4 focus:ring-slate-100"
+                }`}
+                placeholder="e.g. U17 / Seniors"
+                value={division}
+                onChange={(e) => setDivision(e.target.value)}
+              />
+            </div>
           </div>
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black uppercase text-slate-500 ml-1">
+              Season/Phase {setupAttempted && !season && <span className="text-red-500">*</span>}
+            </label>
+            <div className="relative">
+              <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input
+                className={`w-full pl-12 pr-4 py-3 bg-slate-50 border rounded-xl outline-none text-sm font-bold transition-all ${
+                  setupAttempted && !season
+                    ? "border-red-500 bg-red-50 ring-4 ring-red-100"
+                    : "border-slate-200 focus:ring-4 focus:ring-slate-100"
+                }`}
+               placeholder="e.g. 1, 2, 3, 4, etc."
+                value={season}
+                onChange={(e) => setSeason(e.target.value)}
+              />
+            </div>
+          </div>
+      
         </div>
       </div>
 
@@ -183,6 +229,8 @@ export default function CommitteeDashboardView({
           onRemove={(id) => handleRemovePlayer("A", id)}
           availableTeams={availableTeams}
           onSelectTeam={(team) => handleSelectTeam("A", team)}
+          setupAttempted={setupAttempted}
+          userRole={user.role} // Pass user role to TeamEntrySection
         />
         <TeamEntrySection
           side="B"
@@ -195,6 +243,8 @@ export default function CommitteeDashboardView({
           onRemove={(id) => handleRemovePlayer("B", id)}
           availableTeams={availableTeams}
           onSelectTeam={(team) => handleSelectTeam("B", team)}
+          userRole={user.role} // Pass user role to TeamEntrySection
+          setupAttempted={setupAttempted}
         />
       </div>
 
@@ -223,6 +273,8 @@ function TeamEntrySection({
   onRemove,
   availableTeams,
   onSelectTeam,
+  setupAttempted,
+  userRole,
 }) {
   const accentBorder = color === "blue" ? "border-blue-500" : "border-red-500";
   const iconColor = color === "blue" ? "text-blue-500" : "text-red-500";
@@ -231,6 +283,7 @@ function TeamEntrySection({
       ? "bg-blue-50 text-blue-600 border-blue-100"
       : "bg-red-50 text-red-600 border-red-100";
 
+  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const suggestions = (availableTeams || []).filter(
     (t) =>
@@ -254,43 +307,88 @@ function TeamEntrySection({
 
       <div className="space-y-1.5">
         <label className="text-[10px] font-black uppercase text-slate-500 ml-1">
-          Team Name
+          Team Name {setupAttempted && !teamData.name && <span className="text-red-500">*</span>}
         </label>
         <div className="relative">
           <input
-            className="w-full px-5 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-slate-100 font-bold pr-10"
+            className={`w-full px-5 py-3 bg-slate-50 border rounded-xl outline-none font-bold pr-10 transition-all ${
+              setupAttempted && !teamData.name
+                ? "border-red-500 bg-red-50 ring-4 ring-red-100"
+                : "border-slate-200 focus:ring-4 focus:ring-slate-100"
+            }`}
             placeholder={`Enter Team ${side} Name`}
             value={teamData.name}
             onFocus={() => setShowSuggestions(true)}
             onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-            onChange={(e) => setTeamData({ ...teamData, name: e.target.value })}
+            onChange={(e) => {
+              const val = e.target.value;
+              setTeamData({
+                ...teamData,
+                name: val,
+                id: null, // Clear team ID if name is changed manually
+              });
+              // Auto-load if name matches exactly
+              const match = availableTeams.find(t => t.name.toLowerCase() === val.toLowerCase());
+              if (match) onSelectTeam(match);
+            }}
           />
           <Search
             className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300"
             size={18}
           />
 
-          {showSuggestions && suggestions.length > 0 && (
-            <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-1">
-              {suggestions.map((team, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => onSelectTeam(team)}
-                  className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center justify-between border-b border-slate-50 last:border-0"
-                >
-                  <div>
-                    <p className="font-bold text-slate-800">{team.name}</p>
-                    <p className="text-[10px] text-slate-400 font-black uppercase">
-                      {team.league} • Season {team.season}
-                    </p>
-                  </div>
-                  <ChevronRight size={14} className="text-slate-300" />
-                </button>
-              ))}
+          {showSuggestions && (
+            <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-1">
+              {suggestions.length > 0 &&
+                suggestions.map((team, idx) => (
+                  <button
+                    key={idx}
+                    onMouseDown={() => {
+                      onSelectTeam(team);
+                      setShowSuggestions(false);
+                    }}
+                    className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center justify-between border-b border-slate-50 last:border-0"
+                  >
+                    <div>
+                      <p className="font-bold text-slate-800">
+                        {team.name}
+                        {team.official_id && (
+                          <span className="ml-2 text-[8px] font-black bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full uppercase">
+                            Official
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-black uppercase">
+                        {team.league} • {team.division} • Season {team.season}
+                      </p>
+                    </div>
+                    <ChevronRight size={14} className="text-slate-300" />
+                  </button>
+                ))}
+              <button
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setIsTeamModalOpen(true);
+                }}
+                className="w-full text-left px-4 py-3 bg-slate-50 hover:bg-slate-100 flex items-center justify-center gap-2 text-blue-600 font-bold border-t border-slate-100"
+              >
+                <List size={16} /> Browse All Teams
+              </button>
             </div>
           )}
         </div>
       </div>
+
+      <TeamSelectionModal
+        isOpen={isTeamModalOpen}
+        onClose={() => setIsTeamModalOpen(false)}
+        teams={availableTeams}
+        onSelect={(team) => {
+          onSelectTeam(team);
+          setIsTeamModalOpen(false);
+        }}
+        userRole={userRole}
+      />
 
       <div className="border-t border-slate-100 pt-4">
         <label className="text-[10px] font-black uppercase text-slate-500 ml-1 block mb-3">

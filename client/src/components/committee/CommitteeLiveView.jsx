@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import axios from "axios";
 import {
   ArrowLeft,
   ArrowRight,
@@ -13,8 +14,10 @@ import {
   Play,
   Pause,
   RotateCcw,
-} from "lucide-react";
+  Settings,
+} from "lucide-react"; // This is committeeQuarter
 import { formatTime } from "../../utils/helpers";
+import KeyboardSettingsModal from "./KeyboardSettingsModal";
 
 export default function CommitteeLiveView({
   initialData,
@@ -26,16 +29,43 @@ export default function CommitteeLiveView({
   setIsRunning,
   quarter, // Now received as prop
   setQuarter, // Now received as prop
+  committeeKeybindings,
+  setCommitteeKeybindings,
+  possessionArrow, // Now received as prop
+  setPossessionArrow, // Now received as prop
+  timeouts, // Now received as prop
+  setTimeouts, // Now received as prop
+  onGameSaved, // Now received as prop
 }) {
-  const [possessionArrow, setPossessionArrow] = useState(null); // 'A', 'B', or null
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [logs, setLogs] = useState([]);
   const [shotClock, setShotClock] = useState(24);
-
   // Scores & Fouls State
   const [scores, setScores] = useState({ A: 0, B: 0 });
   const [teamFouls, setTeamFouls] = useState({ A: 0, B: 0 });
 
+  const periodName = quarter > 4 ? `Overtime ${quarter - 4}` : `Period ${quarter}`;
+
+  const buzzerRef = useRef(null);
+
   // Detailed stats per player
+
+  // --- FIBA Timeout Logic ---
+  const maxTimeouts = quarter <= 2 ? 2 : quarter <= 4 ? 3 : 1;
+
+  const getUsedTimeoutsCount = (team) => {
+    if (quarter <= 2) {
+      // First Half allowance
+      return timeouts[team].filter((t) => t.quarter <= 2).length;
+    } else if (quarter <= 4) {
+      // Second Half allowance
+      return timeouts[team].filter((t) => t.quarter === 3 || t.quarter === 4).length;
+    } else {
+      // Overtime: 1 per period
+      return timeouts[team].filter((t) => t.quarter === quarter).length;
+    }
+  };
+
   const [playerStats, setPlayerStats] = useState({}); // { playerId: { points: 0, fouls: 0 } }
 
   // Ensure all players are initialized in the stats map
@@ -47,6 +77,32 @@ export default function CommitteeLiveView({
     setPlayerStats(stats);
   }, [initialData]);
 
+  // --- AUDIO BUZZER LOGIC ---
+  useEffect(() => {
+    buzzerRef.current = new Audio('/sounds/buzzer.mp3'); // Make sure you have a buzzer.mp3 in your public/sounds folder
+    buzzerRef.current.volume = 0.5; // Adjust volume as needed
+  }, []);
+
+  const playBuzzer = () => {
+    if (buzzerRef.current) {
+      buzzerRef.current.play().catch(e => console.error("Error playing buzzer sound:", e));
+    }
+  };
+
+  // Trigger buzzer when game clock hits zero
+  useEffect(() => {
+    if (clock === 0 && isRunning) {
+      playBuzzer();
+    }
+  }, [clock, isRunning]);
+
+  // Trigger buzzer when shot clock hits zero
+  useEffect(() => {
+    if (shotClock === 0 && isRunning) {
+      playBuzzer();
+    }
+  }, [shotClock, isRunning]);
+
   // --- SHOT CLOCK TIMER LOGIC ---
   useEffect(() => {
     let interval;
@@ -57,6 +113,32 @@ export default function CommitteeLiveView({
     }
     return () => clearInterval(interval);
   }, [isRunning, shotClock]);
+
+  // --- KEYBOARD SHORTCUTS ---
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      const { toggleGameClock, resetShotClock24, resetShotClock14 } = committeeKeybindings;
+      if ([toggleGameClock, resetShotClock24, resetShotClock14].includes(event.code)) {
+        event.preventDefault();
+      }
+
+      switch (event.code) {
+        case toggleGameClock:
+          setIsRunning(prev => !prev); // Toggle game clock
+          break;
+        case resetShotClock24: // 'R' key for Reset 24s
+          setShotClock(24);
+          break;
+        case resetShotClock14: // 'F' key for Reset 14s
+          setShotClock(14);
+          break;
+        default:
+          break;
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown); // Dependencies ensure the latest state setters are used
+  }, [setIsRunning, setShotClock, committeeKeybindings]);
 
   // --- SYNC WITH EXTERNAL SCOREBOARD ---
   useEffect(() => {
@@ -72,10 +154,25 @@ export default function CommitteeLiveView({
       clock,
       possessionArrow,
       shotClock,
+      timeouts: {
+        A: getUsedTimeoutsCount("A"),
+        B: getUsedTimeoutsCount("B"),
+        max: maxTimeouts,
+      },
     });
 
     return () => channel.close();
-  }, [scores, teamFouls, quarter, clock, possessionArrow, shotClock, initialData]);
+  }, [
+    scores,
+    teamFouls,
+    quarter,
+    clock,
+    possessionArrow,
+    shotClock,
+    initialData,
+    timeouts,
+    maxTimeouts,
+  ]);
 
   const openExternalScoreboard = () => {
     const width = 1000;
@@ -108,6 +205,7 @@ export default function CommitteeLiveView({
       jersey: player.jersey,
       amount,
       quarter,
+      clock,
     });
   };
 
@@ -138,7 +236,50 @@ export default function CommitteeLiveView({
       playerName: player.name,
       jersey: player.jersey,
       quarter,
+      clock,
     });
+  };
+
+  const handleTimeout = (team) => {
+    const used = getUsedTimeoutsCount(team);
+    if (used >= maxTimeouts) {
+      showNotification(
+        `No timeouts remaining for ${team === "A" ? initialData.teamAName : initialData.teamBName}.`,
+      );
+      return;
+    }
+
+    setTimeouts((prev) => ({
+      ...prev,
+      [team]: [...prev[team], { quarter, clock }],
+    }));
+
+    setIsRunning(false); // FIBA rules: Clock stops
+    addLog({ type: "TIMEOUT", team, quarter, clock });
+    showNotification(`Timeout called for ${team === "A" ? initialData.teamAName : initialData.teamBName}`);
+  };
+
+  const handleSaveGame = async () => {
+    try {
+      setIsRunning(false);
+      const payload = {
+        gameId: initialData.gameId,
+        finalScoreA: scores.A,
+        finalScoreB: scores.B,
+        finalClock: clock,
+        finalQuarter: quarter,
+        logs: [...logs].reverse(), // Send chronological history
+      };
+
+      await axios.post("/api/committee/games/save", payload);
+      showNotification("Official scoresheet saved successfully!");
+      if (onGameSaved) onGameSaved();
+    } catch (err) {
+      console.error("Save Error:", err);
+      showNotification(
+        err.response?.data?.error || "Failed to save official game.",
+      );
+    }
   };
 
   const handleJumpBall = () => {
@@ -150,26 +291,29 @@ export default function CommitteeLiveView({
     }
     const next = possessionArrow === "A" ? "B" : "A";
     setPossessionArrow(next);
-    addLog({ type: "ARROW_FLIP", to: next, quarter });
+    addLog({ type: "ARROW_FLIP", to: next, quarter, clock });
   };
 
   const setInitialJumpBall = (winner) => {
     const arrowPointsTo = winner === "A" ? "B" : "A";
     setPossessionArrow(arrowPointsTo);
     showNotification(`Arrow points to Team ${arrowPointsTo}`);
-    addLog({ type: "GAME_START", winner, arrow: arrowPointsTo, quarter: 1 });
+    addLog({ type: "GAME_START", winner, arrow: arrowPointsTo, quarter: 1, clock: 600 });
   };
 
   const advanceQuarter = () => {
+    const nextQ = quarter + 1;
+    const nextPeriodName = nextQ > 4 ? `Overtime ${nextQ - 4}` : `Period ${nextQ}`;
     if (possessionArrow) {
       // Per FIBA/User logic: Possession for next quarter goes to arrow team
       // After throw-in, arrow should flip
       const nextArrow = possessionArrow === "A" ? "B" : "A";
       setPossessionArrow(nextArrow);
       showNotification(
-        `Quarter ${quarter + 1} started. Arrow flipped to ${nextArrow}.`,
+        `${nextPeriodName} started. Arrow flipped to ${nextArrow}.`,
       );
     }
+    addLog({ type: "PERIOD_END", team: possessionArrow || "A", quarter, clock });
     setQuarter((prev) => prev + 1);
     setClock(600); // Reset clock for new quarter
     setShotClock(24); // Reset shot clock for new quarter
@@ -177,7 +321,7 @@ export default function CommitteeLiveView({
   };
 
   const addLog = (log) => {
-    setLogs((prev) => [log, ...prev].slice(0, 50));
+    setLogs((prev) => [log, ...prev]);
   };
 
   const undoLastAction = () => {
@@ -196,6 +340,8 @@ export default function CommitteeLiveView({
 
   return (
     <div className="max-w-7xl mx-auto space-y-4 pb-20">
+      
+
       {/* 1. TOP SCOREBOARD UNIT */}
       <div className="bg-slate-900 text-white p-6 rounded-3xl shadow-2xl border-b-4 border-amber-500 sticky top-4 z-50">
         <div className="flex justify-between items-center">
@@ -224,6 +370,25 @@ export default function CommitteeLiveView({
                 </button>
               </div>
             </div>
+
+            {/* Team A Timeout Indicators */}
+            <div className="mt-4 space-y-2">
+              <div className="flex justify-center gap-1">
+                {Array.from({ length: maxTimeouts }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={`w-4 h-1.5 rounded-full ${i < getUsedTimeoutsCount("A") ? "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" : "bg-slate-700"}`}
+                  />
+                ))}
+              </div>
+              <button
+                onClick={() => handleTimeout("A")}
+                className="bg-slate-800 hover:bg-slate-700 px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest text-slate-400 transition-colors"
+              >
+                Timeout
+              </button>
+            </div>
+
             <div className="flex justify-center gap-1 mt-4">
               {[1, 2, 3, 4, 5].map((f) => (
                 <div
@@ -238,7 +403,7 @@ export default function CommitteeLiveView({
           <div className="flex flex-col items-center px-6 border-x border-slate-800 min-w-[240px]">
             <div className="flex items-center gap-3 mb-4">
               <span className="bg-amber-500 text-slate-900 px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter">
-                Period {quarter}
+                {periodName}
               </span>
               <button
                 onClick={openExternalScoreboard}
@@ -248,6 +413,13 @@ export default function CommitteeLiveView({
                 <Monitor size={16} />
               </button>
             </div>
+            <button
+              onClick={() => setIsSettingsModalOpen(true)}
+              className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-400 transition-colors"
+              title="Keyboard Shortcuts Settings"
+            >
+              <Settings size={16} />
+            </button>
 
             {/* Official Game Clock Controls */}
             <div className="flex flex-col items-center mb-6 bg-slate-800/50 p-3 rounded-2xl border border-slate-700 w-full gap-4">
@@ -353,6 +525,25 @@ export default function CommitteeLiveView({
                 </button>
               </div>
             </div>
+
+            {/* Team B Timeout Indicators */}
+            <div className="mt-4 space-y-2">
+              <div className="flex justify-center gap-1">
+                {Array.from({ length: maxTimeouts }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={`w-4 h-1.5 rounded-full ${i < getUsedTimeoutsCount("B") ? "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" : "bg-slate-700"}`}
+                  />
+                ))}
+              </div>
+              <button
+                onClick={() => handleTimeout("B")}
+                className="bg-slate-800 hover:bg-slate-700 px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest text-slate-400 transition-colors"
+              >
+                Timeout
+              </button>
+            </div>
+
             <div className="flex justify-center gap-1 mt-4">
               {[1, 2, 3, 4, 5].map((f) => (
                 <div
@@ -390,6 +581,15 @@ export default function CommitteeLiveView({
           </p>
         </div>
       )}
+
+      {/* Keyboard Settings Modal - Rendered directly in CommitteeLiveView */}
+      <KeyboardSettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        keybindings={committeeKeybindings}
+        setKeybindings={setCommitteeKeybindings}
+        showNotification={showNotification}
+      />
 
       {/* 3. ROSTERS AND ACTION GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -434,27 +634,37 @@ export default function CommitteeLiveView({
                 Waiting for tip-off...
               </p>
             ) : (
-              logs.map((log, i) => (
+            logs.slice(0, 50).map((log, i) => (
                 <div
                   key={i}
                   className="flex items-center justify-between bg-slate-50 p-2 rounded-xl border border-slate-100 animate-in slide-in-from-top-1"
                 >
                   <div className="flex items-center gap-3">
                     <span className="text-[8px] font-black bg-slate-900 text-white w-5 h-5 rounded-full flex items-center justify-center">
-                      Q{log.quarter}
+                      {log.quarter > 4 ? `OT${log.quarter - 4}` : `Q${log.quarter}`}
                     </span>
-                    <span
-                      className={`text-[10px] font-black uppercase ${log.team === "A" ? "text-blue-600" : "text-red-600"}`}
-                    >
-                      #{log.jersey} {log.playerName}
-                    </span>
+                    {log.type === "TIMEOUT" ? (
+                      <span className={`text-[10px] font-black uppercase ${log.team === "A" ? "text-blue-600" : "text-red-600"}`}>
+                        TEAM {log.team === "A" ? initialData.teamAName : initialData.teamBName} TIMEOUT
+                      </span>
+                    ) : (
+                      <span className={`text-[10px] font-black uppercase ${log.team === "A" ? "text-blue-600" : "text-red-600"}`}>
+                        #{log.jersey} {log.playerName}
+                      </span>
+                    )}
                   </div>
-                  <span
-                    className={`text-[10px] font-black px-2 py-0.5 rounded ${log.type === "FOUL" ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}`}
-                  >
-                    {log.type === "FOUL"
-                      ? "Personal Foul"
-                      : `+${log.amount} PTS`}
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded ${
+                    log.type === "FOUL" 
+                      ? "bg-red-100 text-red-700" 
+                      : log.type === "TIMEOUT"
+                        ? "bg-amber-100 text-amber-700"
+                        : "bg-emerald-100 text-emerald-700"
+                  }`}>
+                    {log.type === "FOUL" 
+                      ? "Personal Foul" 
+                      : log.type === "TIMEOUT" 
+                        ? "Timeout" 
+                        : `+${log.amount} PTS`}
                   </span>
                 </div>
               ))
@@ -468,10 +678,13 @@ export default function CommitteeLiveView({
             onClick={advanceQuarter}
             className="w-full bg-white border-2 border-slate-200 hover:border-slate-900 py-4 rounded-2xl font-black uppercase text-sm transition-all flex items-center justify-center gap-3 shadow-sm"
           >
-            End Quarter {quarter}
+            End {periodName}
           </button>
 
-          <button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-6 rounded-2xl font-black uppercase tracking-widest text-lg transition-all shadow-xl flex items-center justify-center gap-3">
+          <button
+            onClick={handleSaveGame}
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-6 rounded-2xl font-black uppercase tracking-widest text-lg transition-all shadow-xl flex items-center justify-center gap-3"
+          >
             <Save size={24} />
             Finish & Save Game
           </button>
@@ -579,6 +792,8 @@ function RosterSection({ team, name, roster, stats, onScore, onFoul, color }) {
           );
         })}
       </div>
+
+     
     </div>
   );
 }

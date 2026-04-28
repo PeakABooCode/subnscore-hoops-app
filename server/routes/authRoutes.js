@@ -101,7 +101,7 @@ router.post("/login", authLimiter, (req, res, next) => {
 
     if (userRole !== targetRole) {
       return res.status(403).json({
-        error: `Access Denied: Your account role (${userRole}) does not match the ${targetRole} module.`,
+        error: `Unauthorized: This account is registered as a ${userRole}. Please use the correct portal.`,
       });
     }
 

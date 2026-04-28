@@ -17,6 +17,7 @@ export const saveGameSession = async (req, res) => {
     finalScoreThem,
     quarter, // Added quarter to payload
     finalClock,
+    division, // Add division to the destructuring
     lineupsByQuarter,
   } = req.body;
 
@@ -37,13 +38,13 @@ export const saveGameSession = async (req, res) => {
       teamId = teamRes.rows[0].id;
       // Update league/season in case they changed
       await pool.query(
-        "UPDATE teams SET league = $1, season = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3",
-        [teamMeta.league, teamMeta.season, teamId],
+        "UPDATE teams SET league = $1, season = $2, division = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4",
+        [teamMeta.league, teamMeta.season, teamMeta.division, teamId],
       );
     } else {
       const newTeam = await pool.query(
-        "INSERT INTO teams (coach_id, name, league, season) VALUES ($1, $2, $3, $4) RETURNING id",
-        [coachId, teamMeta.teamName, teamMeta.league, teamMeta.season],
+        "INSERT INTO teams (coach_id, name, league, season, division) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+        [coachId, teamMeta.teamName, teamMeta.league, teamMeta.season, teamMeta.division],
       );
       teamId = newTeam.rows[0].id;
     }

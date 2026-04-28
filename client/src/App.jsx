@@ -16,6 +16,7 @@ import InputModal from "./components/common/InputModal";
 import HistoryView from "./components/coaching/HistoryView";
 import { useTimer } from "./hooks/useTimer";
 import {
+  DEFAULT_COMMITTEE_KEYBINDINGS,
   QUARTER_SECONDS,
   hydrateActions,
   dehydrateActions,
@@ -55,7 +56,6 @@ export default function App() {
   const isScoreboardView = urlParams.get("view") === "scoreboard";
 
   const [selectedModule, setSelectedModule] = useState(null);
-  const [committeeGameData, setCommitteeGameData] = useState(null);
   const [notification, setNotification] = useState(null);
   const [actionHistory, setActionHistory] = useState(() => {
     try {
@@ -117,14 +117,22 @@ export default function App() {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   // --- Game State (LocalStorage) ---
+  const [committeeGameData, setCommitteeGameData] = useState(() => {
+    try {
+      const saved = localStorage.getItem("subnscore_committeeGameData");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [teamMeta, setTeamMeta] = useState(() => {
     try {
       const savedMeta = localStorage.getItem("subnscore_teamMeta");
       return savedMeta
-        ? JSON.parse(savedMeta)
-        : { teamName: "", opponent: "", league: "", season: "" };
+        ? { ...JSON.parse(savedMeta), division: JSON.parse(savedMeta).division || "" } // Ensure division is present
+        : { teamName: "", opponent: "", league: "", season: "", division: "" };
     } catch {
-      return { teamName: "", opponent: "", league: "", season: "" };
+      return { teamName: "", opponent: "", league: "", season: "", division: "" };
     }
   });
 
@@ -138,6 +146,22 @@ export default function App() {
     }
   });
 
+  const [committeePossessionArrow, setCommitteePossessionArrow] = useState(() => {
+    try {
+      const saved = localStorage.getItem("subnscore_committeePossessionArrow");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [committeeTimeouts, setCommitteeTimeouts] = useState(() => {
+    try {
+      const saved = localStorage.getItem("subnscore_committeeTimeouts");
+      return saved ? JSON.parse(saved) : { A: [], B: [] };
+    } catch {
+      return { A: [], B: [] };
+    }
+  });
   const [playerStats, setPlayerStats] = useState(() => {
     try {
       const savedStats = localStorage.getItem("subnscore_playerStats");
@@ -188,6 +212,14 @@ export default function App() {
     }
   });
 
+  const [committeeKeybindings, setCommitteeKeybindings] = useState(() => {
+    try {
+      const saved = localStorage.getItem("subnscore_committeeKeybindings");
+      return saved ? JSON.parse(saved) : DEFAULT_COMMITTEE_KEYBINDINGS;
+    } catch {
+      return DEFAULT_COMMITTEE_KEYBINDINGS;
+    }
+  });
   const [timeouts, setTimeouts] = useState(() => {
     try {
       const saved = localStorage.getItem("subnscore_timeouts");
@@ -223,6 +255,9 @@ export default function App() {
   const [isResetGameConfirmOpen, setIsResetGameConfirmOpen] = useState(false);
   const [isAdvanceQuarterConfirmOpen, setIsAdvanceQuarterConfirmOpen] =
     useState(false);
+  const [isDiscardScoresheetConfirmOpen, setIsDiscardScoresheetConfirmOpen] =
+    useState(false);
+  const [resetTargetView, setResetTargetView] = useState("SETUP");
   const [isOpponentScoreInputOpen, setIsOpponentScoreInputOpen] =
     useState(false);
   const [opponentScoreInput, setOpponentScoreInput] = useState("0");
@@ -282,6 +317,13 @@ export default function App() {
   }, [committeeQuarter]);
   useEffect(() => {
     if (!isLoaded.current) return;
+    localStorage.setItem(
+      "subnscore_committeeKeybindings",
+      JSON.stringify(committeeKeybindings),
+    );
+  }, [committeeKeybindings]);
+  useEffect(() => {
+    if (!isLoaded.current) return;
     localStorage.setItem("subnscore_stints", JSON.stringify(stints));
   }, [stints]);
   useEffect(() => {
@@ -307,6 +349,18 @@ export default function App() {
     if (!isLoaded.current) return;
     localStorage.setItem("subnscore_lineups", JSON.stringify(lineupsByQuarter));
   }, [lineupsByQuarter]);
+  useEffect(() => {
+    if (!isLoaded.current) return;
+    localStorage.setItem("subnscore_committeeGameData", JSON.stringify(committeeGameData));
+  }, [committeeGameData]);
+  useEffect(() => {
+    if (!isLoaded.current) return;
+    localStorage.setItem("subnscore_committeePossessionArrow", JSON.stringify(committeePossessionArrow));
+  }, [committeePossessionArrow]);
+  useEffect(() => {
+    if (!isLoaded.current) return;
+    localStorage.setItem("subnscore_committeeTimeouts", JSON.stringify(committeeTimeouts));
+  }, [committeeTimeouts]);
   useEffect(() => {
     if (!isLoaded.current) return;
     if (historyData) {
@@ -408,17 +462,31 @@ export default function App() {
     const savedCommitteeRunning = localStorage.getItem(
       "subnscore_committeeIsRunning",
     );
+    const savedCommitteePossessionArrow = localStorage.getItem(
+      "subnscore_committeePossessionArrow",
+    );
+    const savedCommitteeTimeouts = localStorage.getItem(
+      "subnscore_committeeTimeouts",
+    );
+
+
     const savedCoachingQuarter = localStorage.getItem("subnscore_coachingQuarter");
     const savedCommitteeQuarter = localStorage.getItem("subnscore_committeeQuarter");
 
     if (savedCoachingClock) setCoachingClock(JSON.parse(savedCoachingClock));
+    if (savedCoachingQuarter) setCoachingQuarter(JSON.parse(savedCoachingQuarter));
+    if (savedCommitteeQuarter) setCommitteeQuarter(JSON.parse(savedCommitteeQuarter));
+    const savedCommitteeKeybindings = localStorage.getItem("subnscore_committeeKeybindings");
     if (savedCoachingRunning)
       setIsCoachingRunning(JSON.parse(savedCoachingRunning));
     if (savedCommitteeClock) setCommitteeClock(JSON.parse(savedCommitteeClock));
     if (savedCommitteeRunning)
       setIsCommitteeRunning(JSON.parse(savedCommitteeRunning));
+    if (savedCommitteePossessionArrow) setCommitteePossessionArrow(JSON.parse(savedCommitteePossessionArrow));
+    if (savedCommitteeTimeouts) setCommitteeTimeouts(JSON.parse(savedCommitteeTimeouts));
     if (savedCoachingQuarter) setCoachingQuarter(JSON.parse(savedCoachingQuarter));
     if (savedCommitteeQuarter) setCommitteeQuarter(JSON.parse(savedCommitteeQuarter));
+    if (savedCommitteeKeybindings) setCommitteeKeybindings(JSON.parse(savedCommitteeKeybindings));
 
     // 2. Delay marking as loaded slightly to allow states to settle
     setTimeout(() => {
@@ -577,8 +645,14 @@ export default function App() {
       localStorage.removeItem("subnscore_coachingClock");
       localStorage.removeItem("subnscore_coachingIsRunning");
       localStorage.removeItem("subnscore_coachingQuarter");
+      localStorage.removeItem("subnscore_committeeKeybindings");
       localStorage.removeItem("subnscore_committeeClock");
       localStorage.removeItem("subnscore_committeeIsRunning");
+      localStorage.removeItem("subnscore_committeePossessionArrow");
+      localStorage.removeItem("subnscore_committeeTimeouts");
+    localStorage.removeItem("subnscore_committeePossessionArrow");
+    localStorage.removeItem("subnscore_committeeTimeouts");
+      localStorage.removeItem("subnscore_committeeGameData");
       localStorage.removeItem("subnscore_historyData");
       localStorage.removeItem("subnscore_pasarelleTriggered");
 
@@ -945,6 +1019,8 @@ export default function App() {
     // 2. Wipe Game Stats & Logic
     setPlayerStats({});
     setCourt([]);
+    setCommitteePossessionArrow(null); // Clear committee possession
+    setCommitteeTimeouts({ A: [], B: [] }); // Clear committee timeouts
     setStints([]);
     setCoachingQuarter(1); // Reset coaching quarter
     setCommitteeQuarter(1); // Reset committee quarter
@@ -968,6 +1044,7 @@ export default function App() {
     localStorage.removeItem("subnscore_coachingClock");
     localStorage.removeItem("subnscore_coachingIsRunning");
     localStorage.removeItem("subnscore_coachingQuarter");
+    localStorage.removeItem("subnscore_committeeKeybindings");
     localStorage.removeItem("subnscore_committeeClock");
     localStorage.removeItem("subnscore_committeeIsRunning");
     localStorage.removeItem("subnscore_historyData");
@@ -1715,6 +1792,12 @@ export default function App() {
             showNotification={showNotification}
             availableTeams={availableTeams}
             onGameStart={(data) => {
+              // Force reset all committee session-specific states for a fresh start
+              setCommitteeQuarter(1);
+              setCommitteeClock(QUARTER_SECONDS);
+              setIsCommitteeRunning(false);
+              setCommitteePossessionArrow(null);
+              setCommitteeTimeouts({ A: [], B: [] });
               setCommitteeGameData(data);
               setView("COMMITTEE_LIVE");
             }}
@@ -1723,15 +1806,31 @@ export default function App() {
 
         {user && view === "COMMITTEE_LIVE" && committeeGameData && (
           <CommitteeLiveView
+            key={committeeGameData.gameId} // Force component to start fresh when game changes
             initialData={committeeGameData}
             showNotification={showNotification}
-            onBack={() => setView("COMMITTEE_DASHBOARD")}
+            onBack={() => setIsDiscardScoresheetConfirmOpen(true)}
             clock={committeeClock}
             setClock={setCommitteeClock}
             isRunning={isCommitteeRunning}
             setIsRunning={setIsCommitteeRunning}
             quarter={committeeQuarter}
             setQuarter={setCommitteeQuarter}
+            committeeKeybindings={committeeKeybindings}
+            possessionArrow={committeePossessionArrow}
+            setPossessionArrow={setCommitteePossessionArrow}
+            timeouts={committeeTimeouts}
+            setTimeouts={setCommitteeTimeouts}
+            setCommitteeKeybindings={setCommitteeKeybindings}
+            onGameSaved={() => {
+              setCommitteeGameData(null);
+              setCommitteeQuarter(1);
+              setCommitteeClock(QUARTER_SECONDS);
+              setIsCommitteeRunning(false);
+              setCommitteePossessionArrow(null);
+              setCommitteeTimeouts({ A: [], B: [] });
+              setView("COMMITTEE_DASHBOARD");
+            }}
           />
         )}
 
@@ -1834,7 +1933,7 @@ export default function App() {
           isOpen={isResetGameConfirmOpen}
           onClose={() => setIsResetGameConfirmOpen(false)}
           onConfirm={() => {
-            resetGame(true, true); // Force reset, skip further confirmation
+            resetGame(true, true, resetTargetView); // Force reset, skip further confirmation
             setIsResetGameConfirmOpen(false);
           }}
           title="Confirm New Game"
@@ -1855,6 +1954,28 @@ export default function App() {
           message={`Are you sure you want to end ${coachingQuarter > 4 ? `Overtime ${coachingQuarter - 4}` : `Quarter ${coachingQuarter}`} and advance to the next period?`}
           confirmText="Advance Quarter"
           confirmButtonClass="bg-blue-600 hover:bg-blue-700"
+        />
+
+        {/* Confirmation Modal for Discard Scoresheet */}
+        <ConfirmationModal
+          isOpen={isDiscardScoresheetConfirmOpen}
+          onClose={() => setIsDiscardScoresheetConfirmOpen(false)}
+          onConfirm={() => {
+            // Clear active game and reset all session states
+            setCommitteeGameData(null);
+            setCommitteeQuarter(1);
+            setCommitteeClock(QUARTER_SECONDS);
+            setIsCommitteeRunning(false);
+            setCommitteePossessionArrow(null);
+            setCommitteeTimeouts({ A: [], B: [] });
+            setView("COMMITTEE_DASHBOARD");
+            setIsDiscardScoresheetConfirmOpen(false);
+            showNotification("Scoresheet discarded.");
+          }}
+          title="Discard Scoresheet?"
+          message="Are you sure you want to discard this official scoresheet? All progress for this specific game will be lost."
+          confirmText="Discard Scoresheet"
+          confirmButtonClass="bg-red-600 hover:bg-red-700"
         />
       </main>
     </div>

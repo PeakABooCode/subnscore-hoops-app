@@ -1,0 +1,13 @@
+# Exclude dependency folders
+node_modules/
+dist/
+build/
+
+# Exclude environment and sensitive files
+.env
+*.pem
+apikeys.txt
+
+# Exclude large assets or logs
+*.log
+/archive/
