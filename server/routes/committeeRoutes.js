@@ -3,6 +3,7 @@ import {
   initializeOfficialGame,
   saveOfficialGame,
   getOfficialGames,
+  deleteOfficialGame,
 } from "../controllers/committee/officialController.js";
 import { isOfficial } from "../config/middleware/roleMiddleware.js";
 
@@ -21,5 +22,6 @@ router.get("/status", (req, res) => {
 router.post("/games/init", isOfficial, initializeOfficialGame);
 router.post("/games/save", isOfficial, saveOfficialGame);
 router.get("/games", isOfficial, getOfficialGames);
+router.delete("/games/:id", isOfficial, deleteOfficialGame);
 
 export default router;

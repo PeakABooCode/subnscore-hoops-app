@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
 import {
   Users,
@@ -9,6 +9,7 @@ import {
   PlayCircle,
   ClipboardCheck,
   Search,
+  History,
   ChevronRight,
   List,
 } from "lucide-react";
@@ -20,10 +21,14 @@ export default function CommitteeDashboardView({
   availableTeams,
   onGameStart,
 }) {
+  const [activeTab, setActiveTab] = useState("setup"); // 'setup' or 'history'
   const [league, setLeague] = useState("");
   const [season, setSeason] = useState("");
   const [division, setDivision] = useState("");
   const [setupAttempted, setSetupAttempted] = useState(false);
+
+  const [historyGames, setHistoryGames] = useState([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   // Separate state for Team A and Team B
   const [teamA, setTeamA] = useState({ name: "", roster: [] });
@@ -32,6 +37,35 @@ export default function CommitteeDashboardView({
   // Input state for adding players
   const [newPlayerA, setNewPlayerA] = useState({ name: "", jersey: "" });
   const [newPlayerB, setNewPlayerB] = useState({ name: "", jersey: "" });
+
+  useEffect(() => {
+    if (activeTab === "history") {
+      fetchHistory();
+    }
+  }, [activeTab]);
+
+  const fetchHistory = async () => {
+    setIsLoadingHistory(true);
+    try {
+      const res = await axios.get("/api/committee/games");
+      setHistoryGames(res.data);
+    } catch (err) {
+      showNotification("Failed to load history.");
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  const handleDeleteGame = async (gameId) => {
+    if (!window.confirm("Are you sure you want to delete this official record?")) return;
+    try {
+      await axios.delete(`/api/committee/games/${gameId}`);
+      showNotification("Game deleted.");
+      fetchHistory();
+    } catch (err) {
+      showNotification("Failed to delete game.");
+    }
+  };
 
   const handleSelectTeam = async (side, team) => {
     try {
@@ -151,6 +185,108 @@ export default function CommitteeDashboardView({
         </div>
       </div>
 
+      {/* Tab Navigation */}
+      <div className="flex bg-slate-200 p-1 rounded-2xl w-full max-w-sm mx-auto shadow-inner">
+        <button
+          onClick={() => setActiveTab("setup")}
+          className={`flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest transition-all ${
+            activeTab === "setup"
+              ? "bg-white text-slate-900 shadow-lg"
+              : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          Game Setup
+        </button>
+        <button
+          onClick={() => setActiveTab("history")}
+          className={`flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest transition-all ${
+            activeTab === "history"
+              ? "bg-white text-slate-900 shadow-lg"
+              : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          Game History
+        </button>
+      </div>
+
+      {activeTab === "history" ? (
+        <div className="space-y-4">
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+            <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight flex items-center gap-3 mb-6">
+              <History className="text-amber-500" size={24} />
+              Official Records
+            </h2>
+
+            {isLoadingHistory ? (
+              <div className="py-20 text-center animate-pulse text-slate-400 font-bold uppercase tracking-widest">
+                Loading Records...
+              </div>
+            ) : historyGames.length === 0 ? (
+              <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-3xl">
+                <p className="text-slate-300 font-black uppercase tracking-widest italic">
+                  No official games saved yet.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {historyGames.map((game) => (
+                  <div
+                    key={game.id}
+                    className="bg-slate-50 p-5 rounded-2xl border border-slate-100 hover:border-amber-200 transition-all group"
+                  >
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <span className="text-[8px] font-black bg-slate-900 text-white px-2 py-0.5 rounded uppercase tracking-widest">
+                          {new Date(game.game_date).toLocaleDateString()}
+                        </span>
+                        <h4 className="text-xs font-black text-slate-400 uppercase mt-1">
+                          {game.league} • {game.division}
+                        </h4>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteGame(game.id)}
+                        className="text-slate-300 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex-1 text-center">
+                        <p className="text-[10px] font-black uppercase text-slate-500 truncate">
+                          {game.team_a_display}
+                        </p>
+                        <p className="text-3xl font-black text-slate-900">
+                          {game.final_score_a}
+                        </p>
+                      </div>
+                      <div className="text-slate-200 font-black text-xl">VS</div>
+                      <div className="flex-1 text-center">
+                        <p className="text-[10px] font-black uppercase text-slate-500 truncate">
+                          {game.team_b_display}
+                        </p>
+                        <p className="text-3xl font-black text-slate-900">
+                          {game.final_score_b}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center">
+                      <span className="text-[10px] font-black text-slate-400 uppercase">
+                        {game.status === 'COMPLETED' ? 'Final Result' : 'In Progress'}
+                      </span>
+                      <div className="flex items-center gap-1 text-amber-600 font-black text-[10px] uppercase">
+                        Season {game.season} <ChevronRight size={12} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <>
       {/* Tournament Details Section */}
       <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
         <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight flex items-center gap-3 mb-6">
@@ -258,6 +394,8 @@ export default function CommitteeDashboardView({
           Initialize Scoresheet
         </button>
       </div>
+      </>
+      )}
     </div>
   );
 }

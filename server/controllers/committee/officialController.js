@@ -138,6 +138,51 @@ export const saveOfficialGame = async (req, res) => {
 };
 
 export const getOfficialGames = async (req, res) => {
-  // Logic to fetch games managed by this official
-  res.json({ message: "Official games list logic not implemented yet" });
+  const officialId = req.user.id;
+  try {
+    const result = await pool.query(
+      `SELECT g.*, 
+              ta.name as team_a_display, 
+              tb.name as team_b_display
+       FROM official_games g
+       JOIN official_teams ta ON g.team_a_id = ta.id
+       JOIN official_teams tb ON g.team_b_id = tb.id
+       WHERE g.official_id = $1
+       ORDER BY g.game_date DESC`,
+      [officialId]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Fetch Official Games Error:", err);
+    res.status(500).json({ error: "Failed to fetch official games history." });
+  }
+};
+
+export const deleteOfficialGame = async (req, res) => {
+  const { id } = req.params;
+  const officialId = req.user.id;
+
+  try {
+    await pool.query("BEGIN");
+
+    // Verify ownership
+    const check = await pool.query(
+      "SELECT id FROM official_games WHERE id = $1 AND official_id = $2",
+      [id, officialId]
+    );
+
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: "Game not found or unauthorized." });
+    }
+
+    await pool.query("DELETE FROM official_action_logs WHERE game_id = $1", [id]);
+    await pool.query("DELETE FROM official_games WHERE id = $1", [id]);
+
+    await pool.query("COMMIT");
+    res.json({ message: "Official game deleted successfully." });
+  } catch (err) {
+    await pool.query("ROLLBACK");
+    console.error("Delete Official Game Error:", err);
+    res.status(500).json({ error: "Failed to delete official game." });
+  }
 };
