@@ -39,7 +39,7 @@ export default function CommitteeScoreboardView() {
       <div className="flex-1 flex flex-col lg:flex-row items-center justify-between gap-8 lg:gap-0 py-8 lg:py-0">
         {/* Team A */}
         <div className="flex flex-col items-center space-y-2 lg:space-y-4 w-full lg:w-1/3">
-          <h2 className="text-2xl md:text-4xl lg:text-6xl font-black text-blue-500 uppercase text-center truncate w-full tracking-tighter">
+          <h2 className="text-2xl md:text-4xl lg:text-5xl font-black text-blue-500 uppercase text-center truncate w-full tracking-tighter">
             {data.teamAName}
           </h2>
           <div className="text-[5rem] sm:text-[8rem] md:text-[12rem] lg:text-[16rem] font-mono font-black leading-none tabular-nums text-blue-500 drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]">
@@ -79,13 +79,13 @@ export default function CommitteeScoreboardView() {
 
           <div className="flex flex-col items-center gap-2 lg:gap-4">
             {/* Game Clock */}
-            <div className="text-[4rem] sm:text-[6rem] md:text-[8rem] lg:text-[11rem] font-mono font-black tabular-nums bg-black px-6 py-1 lg:px-10 lg:py-2 rounded-2xl lg:rounded-3xl border-2 lg:border-4 border-zinc-900 text-amber-500 drop-shadow-[0_0_15px_rgba(245,158,11,0.4)] leading-none">
+            <div className="text-[4rem] sm:text-[6rem] md:text-[8rem] lg:text-[15rem] font-mono font-black tabular-nums bg-black px-6 py-1 lg:px-10 lg:py-2 rounded-2xl lg:rounded-3xl border-2 lg:border-4 border-zinc-900 text-amber-500 drop-shadow-[0_0_15px_rgba(245,158,11,0.4)] leading-none">
               {formatTime(data.clock)}
             </div>
 
             {/* Shot Clock - LARGE and FLASHING */}
             <div className="flex flex-col items-center -mt-2 lg:mt-0">
-               <div className={`text-[6rem] sm:text-[8rem] md:text-[10rem] lg:text-[14rem] font-mono font-black tabular-nums leading-none transition-colors duration-300 ${data.shotClock <= 5 ? 'text-red-600 animate-pulse' : data.shotClock <= 10 ? 'text-red-500' : 'text-amber-500'}`}>
+               <div className={`text-[6rem] sm:text-[8rem] md:text-[10rem] lg:text-[12rem] font-mono font-black tabular-nums leading-none transition-colors duration-300 ${data.shotClock <= 5 ? 'text-red-600 animate-pulse' : data.shotClock <= 10 ? 'text-red-500' : 'text-amber-500'}`}>
                  {data.shotClock}
                </div>
                <div className="text-zinc-800 text-xs lg:text-2xl font-black uppercase tracking-[0.3em] lg:tracking-[0.5em] -mt-2 lg:-mt-4">
@@ -124,7 +124,7 @@ export default function CommitteeScoreboardView() {
 
         {/* Team B */}
         <div className="flex flex-col items-center space-y-2 lg:space-y-4 w-full lg:w-1/3">
-          <h2 className="text-2xl md:text-4xl lg:text-6xl font-black text-red-500 uppercase text-center truncate w-full tracking-tighter">
+          <h2 className="text-2xl md:text-4xl lg:text-5xl font-black text-red-500 uppercase text-center truncate w-full tracking-tighter">
             {data.teamBName}
           </h2>
           <div className="text-[5rem] sm:text-[8rem] md:text-[12rem] lg:text-[16rem] font-mono font-black leading-none tabular-nums text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.5)]">

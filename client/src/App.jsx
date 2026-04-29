@@ -162,6 +162,14 @@ export default function App() {
       return { A: [], B: [] };
     }
   });
+  const [committeeLogs, setCommitteeLogs] = useState(() => {
+    try {
+      const saved = localStorage.getItem("subnscore_committeeLogs");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [playerStats, setPlayerStats] = useState(() => {
     try {
       const savedStats = localStorage.getItem("subnscore_playerStats");
@@ -363,6 +371,10 @@ export default function App() {
   }, [committeeTimeouts]);
   useEffect(() => {
     if (!isLoaded.current) return;
+    localStorage.setItem("subnscore_committeeLogs", JSON.stringify(committeeLogs));
+  }, [committeeLogs]);
+  useEffect(() => {
+    if (!isLoaded.current) return;
     if (historyData) {
       // Map keys to short names to save space (Dehydration)
       const optimizedData = {
@@ -468,6 +480,9 @@ export default function App() {
     const savedCommitteeTimeouts = localStorage.getItem(
       "subnscore_committeeTimeouts",
     );
+    const savedCommitteeLogs = localStorage.getItem(
+      "subnscore_committeeLogs",
+    );
 
 
     const savedCoachingQuarter = localStorage.getItem("subnscore_coachingQuarter");
@@ -484,6 +499,7 @@ export default function App() {
       setIsCommitteeRunning(JSON.parse(savedCommitteeRunning));
     if (savedCommitteePossessionArrow) setCommitteePossessionArrow(JSON.parse(savedCommitteePossessionArrow));
     if (savedCommitteeTimeouts) setCommitteeTimeouts(JSON.parse(savedCommitteeTimeouts));
+    if (savedCommitteeLogs) setCommitteeLogs(JSON.parse(savedCommitteeLogs));
     if (savedCoachingQuarter) setCoachingQuarter(JSON.parse(savedCoachingQuarter));
     if (savedCommitteeQuarter) setCommitteeQuarter(JSON.parse(savedCommitteeQuarter));
     if (savedCommitteeKeybindings) setCommitteeKeybindings(JSON.parse(savedCommitteeKeybindings));
@@ -650,8 +666,10 @@ export default function App() {
       localStorage.removeItem("subnscore_committeeIsRunning");
       localStorage.removeItem("subnscore_committeePossessionArrow");
       localStorage.removeItem("subnscore_committeeTimeouts");
+      localStorage.removeItem("subnscore_committeeLogs");
     localStorage.removeItem("subnscore_committeePossessionArrow");
     localStorage.removeItem("subnscore_committeeTimeouts");
+    localStorage.removeItem("subnscore_committeeLogs");
       localStorage.removeItem("subnscore_committeeGameData");
       localStorage.removeItem("subnscore_historyData");
       localStorage.removeItem("subnscore_pasarelleTriggered");
@@ -1021,6 +1039,7 @@ export default function App() {
     setCourt([]);
     setCommitteePossessionArrow(null); // Clear committee possession
     setCommitteeTimeouts({ A: [], B: [] }); // Clear committee timeouts
+    setCommitteeLogs([]); // Clear committee logs
     setStints([]);
     setCoachingQuarter(1); // Reset coaching quarter
     setCommitteeQuarter(1); // Reset committee quarter
@@ -1797,6 +1816,7 @@ export default function App() {
               setCommitteeClock(QUARTER_SECONDS);
               setIsCommitteeRunning(false);
               setCommitteePossessionArrow(null);
+              setCommitteeLogs([]);
               setCommitteeTimeouts({ A: [], B: [] });
               setCommitteeGameData(data);
               // Store the player ID maps returned from the backend
@@ -1823,6 +1843,8 @@ export default function App() {
             setPossessionArrow={setCommitteePossessionArrow}
             timeouts={committeeTimeouts}
             setTimeouts={setCommitteeTimeouts}
+            logs={committeeLogs}
+            setLogs={setCommitteeLogs}
             teamAPlayerMap={committeeGameData.teamAPlayerMap}
             teamBPlayerMap={committeeGameData.teamBPlayerMap}
             setCommitteeKeybindings={setCommitteeKeybindings}
@@ -1832,6 +1854,7 @@ export default function App() {
               setCommitteeClock(QUARTER_SECONDS);
               setIsCommitteeRunning(false);
               setCommitteePossessionArrow(null);
+              setCommitteeLogs([]);
               setCommitteeTimeouts({ A: [], B: [] });
               setView("COMMITTEE_DASHBOARD");
             }}
@@ -1971,6 +1994,7 @@ export default function App() {
             setCommitteeClock(QUARTER_SECONDS);
             setIsCommitteeRunning(false);
             setCommitteePossessionArrow(null);
+            setCommitteeLogs([]);
             setCommitteeTimeouts({ A: [], B: [] });
             setView("COMMITTEE_DASHBOARD");
             setIsDiscardScoresheetConfirmOpen(false);

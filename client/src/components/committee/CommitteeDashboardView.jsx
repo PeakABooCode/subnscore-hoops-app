@@ -175,6 +175,8 @@ export default function CommitteeDashboardView({
         teamBName: teamB.name,
         teamARoster: teamA.roster,
         teamBRoster: teamB.roster,
+        teamAPlayerMap: res.data.teamAPlayerMap,
+        teamBPlayerMap: res.data.teamBPlayerMap,
       });
     } catch (err) {
       console.error("Initialization error:", err);
@@ -253,7 +255,7 @@ export default function CommitteeDashboardView({
                   >
                     <div className="flex justify-between items-start mb-4">
                       <div>
-                        <span className="text-[8px] font-black bg-slate-900 text-white px-2 py-0.5 rounded uppercase tracking-widest">
+                        <span className="text-[10px] font-black bg-slate-900 text-white px-2 py-0.5 rounded uppercase tracking-widest">
                           {new Date(game.game_date).toLocaleDateString()}
                         </span>
                         <h4 className="text-xs font-black text-slate-400 uppercase mt-1">
