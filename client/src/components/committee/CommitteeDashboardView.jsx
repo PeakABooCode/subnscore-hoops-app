@@ -64,16 +64,23 @@ export default function CommitteeDashboardView({
     () => [...new Set(availableTeams.map((t) => t.division).filter(Boolean))],
     [availableTeams],
   );
+  // uniqueSeasons is scoped to whatever league/division is currently selected
+  // so the season field only shows seasons relevant to the active context
   const uniqueSeasons = useMemo(
     () => [
       ...new Set(
         availableTeams
+          .filter((t) => {
+            const matchLeague = !league || t.league === league;
+            const matchDivision = !division || t.division === division;
+            return matchLeague && matchDivision;
+          })
           .map((t) => t.season)
           .filter(Boolean)
           .map((s) => s.toString()),
       ),
-    ], // Ensure season is string for comparison
-    [availableTeams],
+    ],
+    [availableTeams, league, division],
   );
 
   // Filtered suggestions — only show items matching what the user has typed
