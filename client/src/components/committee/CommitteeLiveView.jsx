@@ -21,6 +21,7 @@ import {
   Pause,
   RotateCcw,
   Settings,
+  BellRing,
 } from "lucide-react";
 import { formatTime } from "../../utils/helpers";
 import KeyboardSettingsModal from "./KeyboardSettingsModal";
@@ -114,12 +115,15 @@ export default function CommitteeLiveView({
   const playerStats = useMemo(() => {
     const stats = {};
     [...initialData.teamARoster, ...initialData.teamBRoster].forEach((p) => {
-      stats[p.id] = { points: 0, fouls: 0 };
+      stats[p.id] = { points: 0, fouls: 0, rebounds: 0, assists: 0, steals: 0 };
     });
     (logs || []).forEach((log) => {
       if (log.playerId && stats[log.playerId]) {
         if (log.type === "SCORE") stats[log.playerId].points += log.amount;
         if (log.type === "FOUL") stats[log.playerId].fouls += 1;
+        if (log.type === "REBOUND") stats[log.playerId].rebounds += 1;
+        if (log.type === "ASSIST") stats[log.playerId].assists += 1;
+        if (log.type === "STEAL") stats[log.playerId].steals += 1;
       }
     });
     return stats;
@@ -407,6 +411,21 @@ export default function CommitteeLiveView({
       playerName: player.name,
       jersey: player.jersey,
       amount,
+      quarter,
+      clock,
+    });
+  };
+
+  const handleStat = (team, playerId, type) => {
+    const player = findPlayer(playerId);
+    addLog({
+      type,
+      team,
+      playerId,
+      dbPlayerId:
+        (team === "A" ? teamAPlayerMap : teamBPlayerMap)[playerId] || playerId,
+      playerName: player.name,
+      jersey: player.jersey,
       quarter,
       clock,
     });
@@ -721,6 +740,7 @@ export default function CommitteeLiveView({
             onPlayerSelect={handlePlayerSelection}
             onScore={(pId, amt) => handleScore("A", pId, amt)}
             onFoul={(pId) => handleFoul("A", pId)}
+            onStat={(pId, type) => handleStat("A", pId, type)}
             color="blue"
             showNotification={showNotification}
           />
@@ -845,6 +865,15 @@ export default function CommitteeLiveView({
                   </button>
                 </div>
               </div>
+
+              {/* Buzzer / Horn Button */}
+              <button
+                onClick={playBuzzer}
+                className="w-full bg-red-600 hover:bg-red-500 text-white py-3 rounded-2xl font-black uppercase tracking-widest text-sm transition-all shadow-[0_0_15px_rgba(220,38,38,0.4)] active:scale-95 flex items-center justify-center gap-2 mt-1 border-b-4 border-red-800"
+              >
+                <BellRing size={20} />
+                Sound Horn (Sub / Timeout)
+              </button>
             </div>
 
             {/* Possession Arrow */}
@@ -904,7 +933,10 @@ export default function CommitteeLiveView({
                     const isTimeout = log.type === "TIMEOUT";
                     const isSub =
                       log.type === "SUB_IN" || log.type === "SUB_OUT";
-
+                    const isStat =
+                      log.type === "REBOUND" ||
+                      log.type === "ASSIST" ||
+                      log.type === "STEAL";
                     return (
                       <div
                         key={i}
@@ -917,7 +949,9 @@ export default function CommitteeLiveView({
                                 ? "bg-amber-500/20 border-amber-500/40"
                                 : isSub
                                   ? "bg-indigo-500/20 border-indigo-500/40"
-                                  : "bg-slate-800 border-slate-700"
+                                  : isStat
+                                    ? "bg-cyan-500/20 border-cyan-500/40"
+                                    : "bg-slate-800 border-slate-700"
                         }`}
                       >
                         <div className="flex items-center gap-2">
@@ -951,7 +985,9 @@ export default function CommitteeLiveView({
                                       ? "text-amber-300"
                                       : isSub
                                         ? "text-indigo-300"
-                                        : "text-slate-500"
+                                        : isStat
+                                          ? "text-cyan-300"
+                                          : "text-slate-500"
                               }`}
                             >
                               {" "}
@@ -962,19 +998,25 @@ export default function CommitteeLiveView({
                                   ? "TIMEOUT"
                                   : log.type === "SCORE"
                                     ? `+${log.amount} PTS`
-                                    : log.type === "GAME_START"
-                                      ? "JUMP BALL WON"
-                                      : log.type === "PERIOD_END"
-                                        ? "PERIOD END"
-                                        : log.type === "ARROW_FLIP"
-                                          ? "HELD BALL"
-                                          : log.type === "SCORE_ADJUST"
-                                            ? `${log.amount} SCORE ADJUST`
-                                            : log.type === "SUB_IN"
-                                              ? "IN"
-                                              : log.type === "SUB_OUT"
-                                                ? "OUT"
-                                                : log.type}
+                                    : log.type === "REBOUND"
+                                      ? "REBOUND"
+                                      : log.type === "ASSIST"
+                                        ? "ASSIST"
+                                        : log.type === "STEAL"
+                                          ? "STEAL"
+                                          : log.type === "GAME_START"
+                                            ? "JUMP BALL WON"
+                                            : log.type === "PERIOD_END"
+                                              ? "PERIOD END"
+                                              : log.type === "ARROW_FLIP"
+                                                ? "HELD BALL"
+                                                : log.type === "SCORE_ADJUST"
+                                                  ? `${log.amount} SCORE ADJUST`
+                                                  : log.type === "SUB_IN"
+                                                    ? "IN"
+                                                    : log.type === "SUB_OUT"
+                                                      ? "OUT"
+                                                      : log.type}
                             </span>
                           </div>
                         </div>
@@ -1031,6 +1073,7 @@ export default function CommitteeLiveView({
             onPlayerSelect={handlePlayerSelection}
             onScore={(pId, amt) => handleScore("B", pId, amt)}
             onFoul={(pId) => handleFoul("B", pId)}
+            onStat={(pId, type) => handleStat("B", pId, type)}
             color="red"
             showNotification={showNotification}
           />
@@ -1079,6 +1122,7 @@ function TeamPlayersSection({
   onPlayerSelect,
   onScore,
   onFoul,
+  onStat,
   color,
   showNotification,
 }) {
@@ -1110,6 +1154,7 @@ function TeamPlayersSection({
                 stats={stats[player.id]}
                 onScore={onScore}
                 onFoul={onFoul}
+                onStat={onStat}
                 color={color}
                 isSelected={selectedPlayers.includes(player.id)}
                 onSelect={() => onPlayerSelect(teamSide, player.id)}
@@ -1140,6 +1185,7 @@ function TeamPlayersSection({
                 stats={stats[player.id]}
                 onScore={onScore}
                 onFoul={onFoul}
+                onStat={onStat}
                 color={color}
                 isSelected={selectedPlayers.includes(player.id)}
                 onSelect={() => onPlayerSelect(teamSide, player.id)}
@@ -1158,13 +1204,20 @@ function PlayerCard({
   stats,
   onScore,
   onFoul,
+  onStat,
   color,
   isSelected,
   onSelect,
   isOnCourt,
 }) {
   const themeColor = color === "blue" ? "blue" : "red";
-  const pStats = stats || { points: 0, fouls: 0 };
+  const pStats = stats || {
+    points: 0,
+    fouls: 0,
+    rebounds: 0,
+    assists: 0,
+    steals: 0,
+  };
   const isFouledOut = pStats.fouls >= 5;
 
   return (
@@ -1197,7 +1250,7 @@ function PlayerCard({
             >
               {player.name}
             </span>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2 mt-0.5">
               <span className="text-[10px] font-black text-slate-400 uppercase">
                 PTS: {pStats.points}
               </span>
@@ -1205,6 +1258,15 @@ function PlayerCard({
                 className={`text-[10px] font-black uppercase ${pStats.fouls >= 4 ? "text-red-600" : "text-slate-400"}`}
               >
                 FLS: {pStats.fouls}/5
+              </span>
+              <span className="text-[10px] font-black text-slate-400 uppercase">
+                REB: {pStats.rebounds}
+              </span>
+              <span className="text-[10px] font-black text-slate-400 uppercase">
+                AST: {pStats.assists}
+              </span>
+              <span className="text-[10px] font-black text-slate-400 uppercase">
+                STL: {pStats.steals}
               </span>
             </div>
           </div>
@@ -1227,16 +1289,38 @@ function PlayerCard({
 
       {/* Point Quick Controls - always visible for quick access */}
       {!isFouledOut && (
-        <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-200">
-          {[1, 2, 3].map((pts) => (
+        <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-slate-200">
+          <div className="grid grid-cols-3 gap-2">
+            {[1, 2, 3].map((pts) => (
+              <button
+                key={pts}
+                onClick={() => onScore(player.id, pts)}
+                className={`bg-${themeColor}-600 hover:bg-${themeColor}-700 text-white py-2 rounded-xl font-black text-sm transition-all active:scale-95 shadow-md`}
+              >
+                +{pts}
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-3 gap-2">
             <button
-              key={pts}
-              onClick={() => onScore(player.id, pts)}
-              className={`bg-${themeColor}-600 hover:bg-${themeColor}-700 text-white py-2 rounded-xl font-black text-sm transition-all active:scale-95 shadow-md`}
+              onClick={() => onStat(player.id, "REBOUND")}
+              className="bg-slate-200 hover:bg-slate-300 text-slate-700 py-1.5 rounded-xl font-black text-[10px] transition-all shadow-sm"
             >
-              +{pts}
+              REB
             </button>
-          ))}
+            <button
+              onClick={() => onStat(player.id, "ASSIST")}
+              className="bg-slate-200 hover:bg-slate-300 text-slate-700 py-1.5 rounded-xl font-black text-[10px] transition-all shadow-sm"
+            >
+              AST
+            </button>
+            <button
+              onClick={() => onStat(player.id, "STEAL")}
+              className="bg-slate-200 hover:bg-slate-300 text-slate-700 py-1.5 rounded-xl font-black text-[10px] transition-all shadow-sm"
+            >
+              STL
+            </button>
+          </div>
         </div>
       )}
     </div>

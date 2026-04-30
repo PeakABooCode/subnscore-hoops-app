@@ -364,8 +364,8 @@ export default function CommitteeDashboardView({
 
       {activeTab === "history" ? (
         <div className="space-y-4">
-          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
-            <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight flex items-center gap-3 mb-6">
+          <div className="bg-slate-900 p-6 rounded-3xl shadow-xl border-t-8 border-amber-500">
+            <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3 mb-6">
               <History className="text-amber-500" size={24} />
               Official Records
             </h2>
@@ -386,14 +386,14 @@ export default function CommitteeDashboardView({
                   <div
                     key={game.id}
                     onClick={() => handleViewDetails(game.id)}
-                    className="bg-slate-50 p-5 rounded-2xl border border-slate-100 hover:border-amber-200 transition-all group cursor-pointer"
+                    className="bg-slate-800 p-5 rounded-2xl border border-slate-700 hover:border-amber-500 transition-all group cursor-pointer shadow-lg"
                   >
                     <div className="flex justify-between items-start mb-4">
                       <div>
-                        <span className="text-[10px] font-black bg-slate-900 text-white px-2 py-0.5 rounded uppercase tracking-widest">
+                        <span className="text-[10px] font-black bg-slate-950 text-amber-500 px-2 py-0.5 rounded uppercase tracking-widest">
                           {new Date(game.game_date).toLocaleDateString()}
                         </span>
-                        <h4 className="text-xs font-black text-slate-400 uppercase mt-1">
+                        <h4 className="text-xs font-black text-slate-300 uppercase mt-1">
                           {game.league} • {game.division}
                         </h4>
                       </div>
@@ -413,35 +413,35 @@ export default function CommitteeDashboardView({
 
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex-1 text-center">
-                        <p className="text-[10px] font-black uppercase text-slate-500 truncate">
+                        <p className="text-[10px] font-black uppercase text-slate-400 truncate">
                           {game.team_a_display}
                         </p>
-                        <p className="text-3xl font-black text-slate-900">
+                        <p className="text-3xl font-black text-white">
                           {game.final_score_a}
                         </p>
                       </div>
 
-                      <div className="text-slate-200 font-black text-xl">
+                      <div className="text-slate-600 font-black text-xl">
                         VS
                       </div>
 
                       <div className="flex-1 text-center">
-                        <p className="text-[10px] font-black uppercase text-slate-500 truncate">
+                        <p className="text-[10px] font-black uppercase text-slate-400 truncate">
                           {game.team_b_display}
                         </p>
-                        <p className="text-3xl font-black text-slate-900">
+                        <p className="text-3xl font-black text-white">
                           {game.final_score_b}
                         </p>
                       </div>
                     </div>
 
-                    <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center">
-                      <span className="text-[10px] font-black text-slate-400 uppercase">
+                    <div className="mt-4 pt-4 border-t border-slate-700 flex justify-between items-center">
+                      <span className="text-[10px] font-black text-slate-500 uppercase">
                         {game.status === "COMPLETED"
                           ? "Final Result"
                           : "In Progress"}
                       </span>
-                      <div className="flex items-center gap-1 text-amber-600 font-black text-[10px] uppercase">
+                      <div className="flex items-center gap-1 text-amber-500 font-black text-[10px] uppercase">
                         Season {game.season} <ChevronRight size={12} />
                       </div>
                     </div>
