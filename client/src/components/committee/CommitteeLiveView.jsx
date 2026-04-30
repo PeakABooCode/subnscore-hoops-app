@@ -1245,6 +1245,62 @@ function TeamPlayersSection({
               />
             ))
           )}
+
+          {/* Late Arrival Input */}
+          {isAddingLate ? (
+            <div
+              className={`flex gap-2 mt-2 p-2 bg-${themeColor}-50 border border-${themeColor}-200 rounded-xl animate-in fade-in zoom-in duration-200`}
+            >
+              <input
+                value={lateJersey}
+                onChange={(e) => setLateJersey(e.target.value)}
+                placeholder="#"
+                className="w-10 border rounded p-1.5 text-xs font-bold text-center outline-none"
+              />
+              <input
+                value={lateName}
+                onChange={(e) => setLateName(e.target.value)}
+                placeholder="Player Name"
+                className="flex-1 border rounded p-1.5 text-xs font-bold outline-none"
+              />
+              <button
+                onClick={() => {
+                  if (!lateName || !lateJersey) return;
+                  if (
+                    allPlayers.some(
+                      (p) => p.jersey.toString() === lateJersey.toString(),
+                    )
+                  ) {
+                    showNotification("Jersey already exists.");
+                    return;
+                  }
+                  onAddLatePlayer(teamSide, {
+                    name: lateName,
+                    jersey: lateJersey,
+                  });
+                  setIsAddingLate(false);
+                  setLateName("");
+                  setLateJersey("");
+                }}
+                className={`bg-${themeColor}-600 text-white px-3 py-1.5 rounded-lg text-xs font-black uppercase shadow-md hover:bg-${themeColor}-700`}
+              >
+                Add
+              </button>
+              <button
+                onClick={() => setIsAddingLate(false)}
+                className="text-slate-400 hover:text-slate-600 px-2 font-black"
+              >
+                X
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsAddingLate(true)}
+              className="w-full mt-2 py-3 border-2 border-dashed border-slate-200 rounded-xl text-[10px] font-black text-slate-400 hover:border-slate-400 hover:text-slate-600 transition-colors uppercase tracking-[0.2em] flex items-center justify-center gap-2"
+            >
+              <UserPlus size={14} /> Add Late Player
+            </button>
+          )}
         </div>
       </div>
     </div>
