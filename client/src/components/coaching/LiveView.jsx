@@ -9,6 +9,7 @@ import {
   History,
   Clock,
   TrendingUp,
+  ShieldAlert,
 } from "lucide-react";
 import { formatTime, QUARTER_SECONDS } from "../../utils/helpers";
 
@@ -434,6 +435,8 @@ export default function LiveView({
                   };
                   const timePlayed = playerTimes?.[p.id] || 0;
                   const restTime = calculateRestTime(p.id);
+                  const pm = playerPlusMinus[p.id] || 0;
+                  const streak = playerStreaks[p.id];
                   return (
                     <button
                       key={p.id}
@@ -445,8 +448,41 @@ export default function LiveView({
                           : "bg-white border-slate-100 hover:border-blue-300"
                       } ${isRunning ? "opacity-40 grayscale" : "active:scale-95"}`}
                     >
-                      <div className="font-black text-slate-800 text-sm truncate">
-                        #{p.jersey} {p.name}
+                      <div className="flex justify-between items-start">
+                        <div className="flex flex-col items-start">
+                          <div className="font-black text-slate-800 text-sm truncate">
+                            #{p.jersey} {p.name}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span
+                              className={`text-[10px] font-black uppercase px-1.5 py-0.5 rounded border ${pm > 0 ? "bg-emerald-50 text-emerald-600 border-emerald-100" : pm < 0 ? "bg-red-50 text-red-600 border-red-100" : "bg-slate-100 text-slate-500 border-slate-200"}`}
+                            >
+                              +/- {pm > 0 ? `+${pm}` : pm}
+                            </span>
+                            {streak === "hot" && (
+                              <span
+                                className="text-base animate-bounce"
+                                title="Hot Hand (3+ Scores)"
+                              >
+                                🔥
+                              </span>
+                            )}
+                            {streak === "cold" && (
+                              <span
+                                className="text-base animate-pulse"
+                                title="Cold Streak (2+ TOs)"
+                              >
+                                ❄️
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {stats.fouls >= 4 && (
+                          <span className="text-[8px] font-black bg-red-100 text-red-600 px-1.5 py-0.5 rounded border border-red-200 uppercase flex items-center gap-1 shadow-sm animate-pulse shrink-0 ml-2">
+                            <ShieldAlert size={10} />{" "}
+                            {stats.fouls >= 5 ? "Fouled Out" : "Foul Trouble"}
+                          </span>
+                        )}
                       </div>
                       <div className="flex flex-col gap-1 mt-2 border-t pt-2 border-slate-100">
                         <div className="flex justify-between items-center">
