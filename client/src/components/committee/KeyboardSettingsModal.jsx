@@ -2,9 +2,10 @@ import React, { useState, useEffect } from "react";
 import { X, Keyboard, Save } from "lucide-react";
 
 const keyDisplayMap = {
-  'Space': 'Spacebar',
-  'KeyR': 'R',
-  'KeyF': 'F',
+  Space: "Spacebar",
+  KeyR: "R",
+  KeyF: "F",
+  KeyH: "H",
   // Add more mappings for better display if needed
 };
 
@@ -35,7 +36,9 @@ export default function KeyboardSettingsModal({
         );
 
         if (conflict) {
-          showNotification(`Key "${keyDisplayMap[newKey] || newKey}" is already assigned to "${conflict[0]}".`);
+          showNotification(
+            `Key "${keyDisplayMap[newKey] || newKey}" is already assigned to "${conflict[0]}".`,
+          );
           setEditingKey(null); // Stop editing
           return;
         }
@@ -71,16 +74,22 @@ export default function KeyboardSettingsModal({
           <h2 className="text-2xl font-black text-slate-900 flex items-center gap-3">
             <Keyboard size={28} className="text-blue-600" /> Keyboard Shortcuts
           </h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-red-500 transition-colors">
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-red-500 transition-colors"
+          >
             <X size={24} />
           </button>
         </div>
 
         <div className="space-y-4">
           {Object.entries(tempKeybindings).map(([action, key]) => (
-            <div key={action} className="flex items-center justify-between bg-slate-50 p-4 rounded-xl border border-slate-100">
+            <div
+              key={action}
+              className="flex items-center justify-between bg-slate-50 p-4 rounded-xl border border-slate-100"
+            >
               <span className="font-bold text-slate-700 capitalize">
-                {action.replace(/([A-Z])/g, ' $1').trim()}
+                {action.replace(/([A-Z])/g, " $1").trim()}
               </span>
               <button
                 onClick={() => setEditingKey(action)}
@@ -90,7 +99,9 @@ export default function KeyboardSettingsModal({
                     : "bg-blue-600 hover:bg-blue-700 text-white"
                 }`}
               >
-                {editingKey === action ? "Press a key..." : (keyDisplayMap[key] || key)}
+                {editingKey === action
+                  ? "Press a key..."
+                  : keyDisplayMap[key] || key}
               </button>
             </div>
           ))}

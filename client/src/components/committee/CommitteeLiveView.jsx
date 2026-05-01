@@ -73,6 +73,7 @@ export default function CommitteeLiveView({
     quarter > 4 ? `Overtime ${quarter - 4}` : `Period ${quarter}`;
 
   const buzzerRef = useRef(null);
+  const hornRef = useRef(null);
 
   // --- FIBA Timeout Logic ---
   const maxTimeouts = quarter <= 2 ? 2 : quarter <= 4 ? 3 : 1;
@@ -162,15 +163,28 @@ export default function CommitteeLiveView({
   useEffect(() => {
     buzzerRef.current = new Audio("/sounds/buzzer.mp3"); // Make sure you have a buzzer.mp3 in your public/sounds folder
     buzzerRef.current.volume = 0.5; // Adjust volume as needed
+    hornRef.current = new Audio("/sounds/substimeout.mp3");
+    hornRef.current.volume = 0.5;
   }, []);
 
   const playBuzzer = () => {
     if (buzzerRef.current) {
+      buzzerRef.current.currentTime = 0;
       buzzerRef.current
         .play()
         .catch((e) => console.error("Error playing buzzer sound:", e));
     }
     setIsRunning(false); // Stop the clock when the horn sounds
+  };
+
+  const playHorn = () => {
+    if (hornRef.current) {
+      hornRef.current.currentTime = 0;
+      hornRef.current
+        .play()
+        .catch((e) => console.error("Error playing horn:", e));
+    }
+    setIsRunning(false);
   };
 
   // Trigger buzzer when game clock hits zero
@@ -190,13 +204,17 @@ export default function CommitteeLiveView({
   // --- SHOT CLOCK TIMER LOGIC ---
   useEffect(() => {
     let interval;
-    if (isRunning && shotClock > 0) {
+    if (isRunning) {
       interval = setInterval(() => {
-        setShotClock((prev) => Math.max(0, prev - 1));
-      }, 1000);
+        setShotClock((prev) => {
+          if (prev <= 0) return 0;
+          const next = prev - 0.1;
+          return next <= 0 ? 0 : Number(next.toFixed(1));
+        });
+      }, 100); // Tick every 100ms
     }
     return () => clearInterval(interval);
-  }, [isRunning, shotClock]);
+  }, [isRunning]);
 
   const triggerShotClockPulse = (value) => {
     setShotClock(value);
@@ -207,12 +225,21 @@ export default function CommitteeLiveView({
   // --- KEYBOARD SHORTCUTS ---
   useEffect(() => {
     const handleKeyDown = (event) => {
-      const { toggleGameClock, resetShotClock24, resetShotClock14 } =
+      // Ignore shortcut keys if the user is typing in an input field (like late players)
+      const activeTag = event.target.tagName.toLowerCase();
+      if (activeTag === "input" || activeTag === "textarea") {
+        return;
+      }
+
+      const { toggleGameClock, resetShotClock24, resetShotClock14, soundHorn } =
         committeeKeybindings;
       if (
-        [toggleGameClock, resetShotClock24, resetShotClock14].includes(
-          event.code,
-        )
+        [
+          toggleGameClock,
+          resetShotClock24,
+          resetShotClock14,
+          soundHorn,
+        ].includes(event.code)
       ) {
         event.preventDefault();
       }
@@ -226,6 +253,9 @@ export default function CommitteeLiveView({
           break;
         case resetShotClock14: // 'F' key for Reset 14s
           triggerShotClockPulse(14);
+          break;
+        case soundHorn: // 'H' key for manual Horn
+          playHorn();
           break;
         default:
           break;
@@ -329,6 +359,7 @@ export default function CommitteeLiveView({
       type: "SUB_IN",
       team: teamSide,
       playerId: id,
+      dbPlayerId: null, // explicit null to prompt the backend to create this player
       playerName: newP.name,
       jersey: newP.jersey,
       quarter,
@@ -404,6 +435,8 @@ export default function CommitteeLiveView({
           type: "SUB_OUT",
           team: teamSide,
           playerId: p.id,
+          dbPlayerId:
+            (teamSide === "A" ? teamAPlayerMap : teamBPlayerMap)[p.id] || null,
           playerName: p.name,
           jersey: p.jersey,
           quarter,
@@ -415,6 +448,8 @@ export default function CommitteeLiveView({
           type: "SUB_IN",
           team: teamSide,
           playerId: p.id,
+          dbPlayerId:
+            (teamSide === "A" ? teamAPlayerMap : teamBPlayerMap)[p.id] || null,
           playerName: p.name,
           jersey: p.jersey,
           quarter,
@@ -851,7 +886,9 @@ export default function CommitteeLiveView({
                           : "text-amber-500"
                     }`}
                   >
-                    {shotClock}
+                    {shotClock <= 10 && shotClock > 0
+                      ? Number(shotClock).toFixed(1)
+                      : Math.ceil(shotClock)}
                   </div>
                 </div>
               </div>
@@ -914,7 +951,7 @@ export default function CommitteeLiveView({
 
               {/* Buzzer / Horn Button */}
               <button
-                onClick={playBuzzer}
+                onClick={playHorn}
                 className="w-full bg-red-600 hover:bg-red-500 text-white py-3 rounded-2xl font-black uppercase tracking-widest text-sm transition-all shadow-[0_0_15px_rgba(220,38,38,0.4)] active:scale-95 flex items-center justify-center gap-2 mt-1 border-b-4 border-red-800"
               >
                 <BellRing size={20} />

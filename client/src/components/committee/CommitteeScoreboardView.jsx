@@ -107,7 +107,9 @@ export default function CommitteeScoreboardView() {
               <div
                 className={`text-[6rem] sm:text-[8rem] md:text-[10rem] lg:text-[12rem] font-mono font-black tabular-nums leading-none transition-colors duration-300 ${data.shotClock <= 5 ? "text-red-600 animate-pulse" : data.shotClock <= 10 ? "text-red-500" : "text-amber-500"}`}
               >
-                {data.shotClock}
+                {data.shotClock <= 10 && data.shotClock > 0
+                  ? Number(data.shotClock).toFixed(1)
+                  : Math.ceil(data.shotClock)}
               </div>
               <div className="text-zinc-800 text-xs lg:text-2xl font-black uppercase tracking-[0.3em] lg:tracking-[0.5em] -mt-2 lg:-mt-4">
                 Shot Clock

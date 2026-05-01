@@ -255,7 +255,9 @@ export default function OfficialGameDetailsModal({ isOpen, onClose, data }) {
                                   ? `POSS: ${log.team_side === "A" ? game.team_a_name : game.team_b_name}`
                                   : log.action_type === "PERIOD_END"
                                     ? ""
-                                    : `#${log.jersey} ${log.player_name}`}
+                                    : log.player_name
+                                      ? `#${log.jersey} ${log.player_name}`
+                                      : "UNKNOWN PLAYER"}
                           </span>
                           <span
                             className={`text-[8px] font-bold uppercase tracking-tighter ${

@@ -1,9 +1,10 @@
 export const QUARTER_SECONDS = 600; // 10 minutes per quarter
 
 export const DEFAULT_COMMITTEE_KEYBINDINGS = {
-  toggleGameClock: 'Space',
-  resetShotClock24: 'KeyR',
-  resetShotClock14: 'KeyF',
+  toggleGameClock: "Space",
+  resetShotClock24: "KeyR",
+  resetShotClock14: "KeyF",
+  soundHorn: "KeyH",
 };
 
 export const formatTime = (totalSeconds) => {
