@@ -1513,7 +1513,14 @@ export default function App() {
   const loadGameFromHistory = async (gameId) => {
     try {
       const res = await axios.get(`/api/coaching/games/${gameId}`);
-      const { game, stats, logs, quarterStats, substitutionLogs } = res.data;
+      const {
+        game,
+        stats,
+        logs,
+        quarterStats,
+        substitutionLogs,
+        lineupsByQuarter: savedLineups,
+      } = res.data;
 
       const historicalRoster = stats.map((s) => ({
         id: s.player_id,
