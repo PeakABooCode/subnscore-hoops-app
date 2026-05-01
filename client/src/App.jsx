@@ -105,6 +105,17 @@ export default function App() {
     name: "",
   });
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isAppLoading, setIsAppLoading] = useState(false);
+  const [appLoadingMsg, setAppLoadingMsg] = useState("");
+  const [appModal, setAppModal] = useState({
+    isOpen: false,
+    type: null,
+    payload: null,
+    title: "",
+    message: "",
+    confirmText: "",
+    btnClass: "",
+  });
 
   // --- Game State (LocalStorage) ---
   const [committeeGameData, setCommitteeGameData] = useState(() => {
@@ -716,12 +727,14 @@ export default function App() {
     }
   };
 
-  const handleSaveRoster = async () => {
+  const executeSaveRoster = async () => {
     if (!teamMeta.teamName) return showNotification("Enter team name first!");
     if (roster.length === 0)
       return showNotification("Add players to save roster!");
 
     try {
+      setIsAppLoading(true);
+      setAppLoadingMsg("Saving Roster to Cloud...");
       // Send current roster with their frontend IDs and existing dbIds for Upsert logic
       const rosterToSave = roster.map((p) => ({
         id: p.id, // Frontend's temporary ID
@@ -812,14 +825,18 @@ export default function App() {
       } else {
         showNotification("Failed to save roster to cloud.");
       }
+    } finally {
+      setIsAppLoading(false);
     }
   };
 
-  const handleLoadRoster = async () => {
+  const executeLoadRoster = async () => {
     if (!teamMeta.teamName)
       return showNotification("Enter team name to search!");
 
     try {
+      setIsAppLoading(true);
+      setAppLoadingMsg("Loading Roster...");
       const res = await axios.get(
         `/api/coaching/teams/roster/${encodeURIComponent(teamMeta.teamName)}`,
       );
@@ -960,7 +977,58 @@ export default function App() {
     } catch (err) {
       console.error("Load Roster Error:", err);
       showNotification("Error loading roster.");
+    } finally {
+      setIsAppLoading(false);
     }
+  };
+
+  const executeRemovePlayer = (id) => {
+    setRoster(roster.filter((p) => p.id !== id));
+  };
+
+  const initiateSaveRoster = () => {
+    setAppModal({
+      isOpen: true,
+      type: "SAVE_ROSTER",
+      payload: null,
+      title: "Save Roster",
+      message: "Overwrite cloud roster with your current players?",
+      confirmText: "Save Roster",
+      btnClass: "bg-emerald-600 hover:bg-emerald-700",
+    });
+  };
+
+  const initiateLoadRoster = () => {
+    setAppModal({
+      isOpen: true,
+      type: "LOAD_ROSTER",
+      payload: null,
+      title: "Load Roster",
+      message:
+        "Load roster from cloud? This will merge with your current edits.",
+      confirmText: "Load Roster",
+      btnClass: "bg-blue-600 hover:bg-blue-700",
+    });
+  };
+
+  const initiateRemovePlayer = (id) => {
+    setAppModal({
+      isOpen: true,
+      type: "REMOVE_PLAYER",
+      payload: id,
+      title: "Remove Player",
+      message: "Remove this player from the lineup?",
+      confirmText: "Remove Player",
+      btnClass: "bg-red-600 hover:bg-red-700",
+    });
+  };
+
+  const handleAppModalConfirm = () => {
+    if (appModal.type === "SAVE_ROSTER") executeSaveRoster();
+    else if (appModal.type === "LOAD_ROSTER") executeLoadRoster();
+    else if (appModal.type === "REMOVE_PLAYER")
+      executeRemovePlayer(appModal.payload);
+    setAppModal({ ...appModal, isOpen: false });
   };
 
   // --- Game Setup Handlers ---
@@ -1667,7 +1735,7 @@ export default function App() {
     return <CommitteeScoreboardView />;
   }
 
-  if (isAuthLoading)
+  if (isAuthLoading || isAppLoading)
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
         <div className="relative mb-6">
@@ -1682,7 +1750,7 @@ export default function App() {
           <div className="w-12 h-1.5 bg-slate-200 rounded-[100%] mx-auto blur-sm animate-pulse"></div>
         </div>
         <div className="text-slate-900 font-black uppercase tracking-[0.3em] text-[10px] animate-pulse">
-          Initializing Courtside
+          {appLoadingMsg || "Initializing Courtside"}
         </div>
       </div>
     );
@@ -1899,16 +1967,14 @@ export default function App() {
             newPlayer={newPlayer}
             setNewPlayer={setNewPlayer}
             handleAddPlayer={handleAddPlayer}
-            handleRemovePlayer={(id) =>
-              setRoster(roster.filter((p) => p.id !== id))
-            }
+            handleRemovePlayer={initiateRemovePlayer}
             handleEditPlayer={handleEditPlayer}
             startGame={startGame}
             setupAttempted={setupAttempted}
             gameInProgress={gameInProgress}
             resetGame={resetGame}
-            handleSaveRoster={handleSaveRoster}
-            handleLoadRoster={handleLoadRoster}
+            handleSaveRoster={initiateSaveRoster}
+            handleLoadRoster={initiateLoadRoster}
             availableTeams={availableTeams}
             gameMode={gameMode}
             setGameMode={setGameMode}
@@ -1919,6 +1985,7 @@ export default function App() {
           <LiveView
             court={court}
             roster={roster}
+            stints={stints}
             playerStats={playerStats}
             clock={coachingClock}
             isRunning={isCoachingRunning}
@@ -2033,6 +2100,17 @@ export default function App() {
           message="Are you sure you want to discard this official scoresheet? All progress for this specific game will be lost."
           confirmText="Discard Scoresheet"
           confirmButtonClass="bg-red-600 hover:bg-red-700"
+        />
+
+        {/* App Level Confirmation Modal for Setup Actions */}
+        <ConfirmationModal
+          isOpen={appModal.isOpen}
+          onClose={() => setAppModal({ ...appModal, isOpen: false })}
+          onConfirm={handleAppModalConfirm}
+          title={appModal.title}
+          message={appModal.message}
+          confirmText={appModal.confirmText}
+          confirmButtonClass={appModal.btnClass}
         />
       </main>
     </div>

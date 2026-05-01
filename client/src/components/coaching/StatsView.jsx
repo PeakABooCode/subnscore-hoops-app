@@ -18,6 +18,7 @@ import {
   Trophy,
   Timer,
 } from "lucide-react";
+import ConfirmationModal from "../common/ConfirmationModal";
 
 export default function StatsView({
   roster,
@@ -37,6 +38,7 @@ export default function StatsView({
 }) {
   const [activeTab, setActiveTab] = useState("boxscore");
   const [touchStart, setTouchStart] = useState(null);
+  const [isSaveConfirmOpen, setIsSaveConfirmOpen] = useState(false);
 
   // Define the logical order of tabs for swipe navigation
   const tabs = ["boxscore", "quarters", "timeline", "lineups"];
@@ -177,7 +179,7 @@ export default function StatsView({
   };
 
   const onSaveClick = async () => {
-    triggerSaveGame();
+    setIsSaveConfirmOpen(true);
   };
 
   // Calculate lineup stats
@@ -1020,6 +1022,19 @@ export default function StatsView({
           </button>
         )}
       </div>
+
+      <ConfirmationModal
+        isOpen={isSaveConfirmOpen}
+        onClose={() => setIsSaveConfirmOpen(false)}
+        onConfirm={() => {
+          triggerSaveGame();
+          setIsSaveConfirmOpen(false);
+        }}
+        title="Save Game Record"
+        message="Are you sure you want to permanently save this game to your History? Make sure all scores and actions are correct."
+        confirmText="Save Game"
+        confirmButtonClass="bg-blue-600 hover:bg-blue-700"
+      />
     </div>
   );
 }

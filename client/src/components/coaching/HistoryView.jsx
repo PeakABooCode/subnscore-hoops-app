@@ -107,7 +107,21 @@ export default function HistoryView({ onViewGame }) {
   };
 
   if (loading)
-    return <div className="text-center p-10 font-bold">Loading History...</div>;
+    return (
+      <div className="min-h-[50vh] flex flex-col items-center justify-center">
+        <div className="relative mb-6">
+          <div className="w-16 h-16 bg-amber-500 rounded-full border-4 border-slate-900 shadow-xl animate-bounce flex items-center justify-center overflow-hidden">
+            <Activity className="text-white opacity-40" size={32} />
+            <div className="absolute w-full h-0.5 bg-slate-900/10 rotate-45"></div>
+            <div className="absolute w-full h-0.5 bg-slate-900/10 -rotate-45"></div>
+          </div>
+          <div className="w-12 h-1.5 bg-slate-200 rounded-[100%] mx-auto blur-sm animate-pulse"></div>
+        </div>
+        <div className="text-slate-900 font-black uppercase tracking-[0.3em] text-[10px] animate-pulse">
+          Loading History...
+        </div>
+      </div>
+    );
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">

@@ -10,7 +10,7 @@ import {
   Clock,
   TrendingUp,
 } from "lucide-react";
-import { formatTime } from "../../utils/helpers";
+import { formatTime, QUARTER_SECONDS } from "../../utils/helpers";
 
 export default function LiveView({
   court,
@@ -32,6 +32,7 @@ export default function LiveView({
   playerTimes,
   addOpponentScore,
   actionHistory = [],
+  stints = [],
 }) {
   const teamTotalScore = Object.values(playerStats).reduce(
     (acc, curr) => acc + (curr.score || 0),
@@ -71,6 +72,71 @@ export default function LiveView({
       ? { type: runType, points: runPoints }
       : null;
   }, [actionHistory]);
+
+  // --- SUGGESTION A: INDIVIDUAL +/- CALCULATION ---
+  const playerPlusMinus = useMemo(() => {
+    const pm = {};
+    roster.forEach((p) => (pm[p.id] = 0));
+    actionHistory.forEach((a) => {
+      if (a.type === "score" || a.type === "opp_score") {
+        const activeStints = stints.filter(
+          (s) =>
+            s.quarter === a.quarter &&
+            s.clockIn >= a.clock &&
+            (s.clockOut === null || s.clockOut <= a.clock),
+        );
+        activeStints.forEach((s) => {
+          if (pm[s.playerId] !== undefined) {
+            pm[s.playerId] += a.type === "score" ? a.amount : -a.amount;
+          }
+        });
+      }
+    });
+    return pm;
+  }, [actionHistory, stints, roster]);
+
+  // --- SUGGESTION B: HOT HAND & COLD STREAK CALCULATION ---
+  const playerStreaks = useMemo(() => {
+    const streaks = {};
+    roster.forEach((p) => {
+      const pActions = actionHistory.filter(
+        (a) =>
+          a.playerId === p.id && (a.type === "score" || a.type === "turnovers"),
+      );
+      const last3 = pActions.slice(-3);
+      if (last3.length >= 3 && last3.every((a) => a.type === "score"))
+        streaks[p.id] = "hot";
+      else {
+        const last2 = pActions.slice(-2);
+        if (last2.length >= 2 && last2.every((a) => a.type === "turnovers"))
+          streaks[p.id] = "cold";
+      }
+    });
+    return streaks;
+  }, [actionHistory, roster]);
+
+  // --- SUGGESTION C: REST TIMER CALCULATION ---
+  const calculateRestTime = (pId) => {
+    const pStints = stints.filter((s) => s.playerId === pId);
+    if (pStints.length === 0) {
+      let restSecs = 0;
+      for (let q = 1; q < quarter; q++) restSecs += QUARTER_SECONDS;
+      restSecs += QUARTER_SECONDS - clock;
+      return formatTime(restSecs);
+    }
+    const lastStint = pStints[pStints.length - 1];
+    if (lastStint.clockOut === null) return "0:00";
+    let restSecs = 0;
+    if (lastStint.quarter === quarter) {
+      restSecs = lastStint.clockOut - clock;
+    } else {
+      restSecs += lastStint.clockOut;
+      for (let q = lastStint.quarter + 1; q < quarter; q++)
+        restSecs += QUARTER_SECONDS;
+      restSecs += QUARTER_SECONDS - clock;
+    }
+    return formatTime(restSecs);
+  };
 
   // --- DYNAMIC PERIOD NAMING ---
   const periodName =
@@ -226,6 +292,8 @@ export default function LiveView({
             };
             const isSelected = pendingSwapIds.includes(id);
             const timePlayed = playerTimes?.[id] || 0;
+            const pm = playerPlusMinus[id] || 0;
+            const streak = playerStreaks[id];
 
             return (
               <div
@@ -251,11 +319,32 @@ export default function LiveView({
                         </span>
                       </div>
                     </div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">
-                      {isSelected
-                        ? "Select substitute from bench"
-                        : "Tap for substitution"}
-                    </span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                        {isSelected ? "Select sub" : "Tap for sub"}
+                      </span>
+                      <span
+                        className={`text-[10px] font-black uppercase px-1.5 py-0.5 rounded border ${pm > 0 ? "bg-emerald-50 text-emerald-600 border-emerald-100" : pm < 0 ? "bg-red-50 text-red-600 border-red-100" : "bg-slate-100 text-slate-500 border-slate-200"}`}
+                      >
+                        +/- {pm > 0 ? `+${pm}` : pm}
+                      </span>
+                      {streak === "hot" && (
+                        <span
+                          className="text-base animate-bounce"
+                          title="Hot Hand (3+ Scores)"
+                        >
+                          🔥
+                        </span>
+                      )}
+                      {streak === "cold" && (
+                        <span
+                          className="text-base animate-pulse"
+                          title="Cold Streak (2+ TOs)"
+                        >
+                          ❄️
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Negatives Display/Buttons (Turnovers & Fouls) */}
@@ -344,6 +433,7 @@ export default function LiveView({
                     turnovers: 0,
                   };
                   const timePlayed = playerTimes?.[p.id] || 0;
+                  const restTime = calculateRestTime(p.id);
                   return (
                     <button
                       key={p.id}
@@ -358,24 +448,31 @@ export default function LiveView({
                       <div className="font-black text-slate-800 text-sm truncate">
                         #{p.jersey} {p.name}
                       </div>
-                      <div className="grid grid-cols-2 gap-y-1 mt-2 border-t pt-2 border-slate-100">
-                        <div className="flex items-center gap-1 text-[10px] font-bold text-blue-500 uppercase">
-                          <Clock size={10} className="shrink-0" />
-                          <span className="tabular-nums">
-                            {formatTime(timePlayed)}
+                      <div className="flex flex-col gap-1 mt-2 border-t pt-2 border-slate-100">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-1 text-[10px] font-bold text-blue-500 uppercase">
+                            <Clock size={10} className="shrink-0" />
+                            <span className="tabular-nums">
+                              {formatTime(timePlayed)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-500 uppercase">
+                            <span>Rest: {restTime}</span>
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] font-bold text-slate-500">
+                            Pts: {stats.score}
+                          </span>
+                          <span className="text-[10px] font-bold text-orange-500">
+                            TO: {stats.turnovers || 0}
+                          </span>
+                          <span
+                            className={`text-[10px] font-bold ${stats.fouls >= 4 ? "text-red-600" : "text-slate-500"}`}
+                          >
+                            Fls: {stats.fouls}
                           </span>
                         </div>
-                        <span className="text-[10px] font-bold text-slate-500">
-                          Pts: {stats.score}
-                        </span>
-                        <span className="text-[10px] font-bold text-orange-500">
-                          TO: {stats.turnovers || 0}
-                        </span>
-                        <span
-                          className={`text-[10px] font-bold ${stats.fouls >= 4 ? "text-red-600" : "text-slate-500"}`}
-                        >
-                          Fls: {stats.fouls}
-                        </span>
                       </div>
                     </button>
                   );
