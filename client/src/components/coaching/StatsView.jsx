@@ -34,7 +34,6 @@ export default function StatsView({
   isHistory, // Prop to detect if we are viewing a past game
   historyQuarterStats, // New prop for pre-calculated quarter data
   gameMode = "FULL", // FULL, HALF, or OPEN
-  lineupsByQuarter = {}, // Explicit snapshots from App.jsx or DB
 }) {
   const [activeTab, setActiveTab] = useState("boxscore");
   const [touchStart, setTouchStart] = useState(null);
@@ -215,16 +214,8 @@ export default function StatsView({
 
   // Calculate lineup stats
   const lineupStats = useMemo(
-    () =>
-      calculateLineupStats(
-        roster,
-        stints,
-        actionHistory,
-        quarter,
-        clock,
-        lineupsByQuarter,
-      ),
-    [roster, stints, actionHistory, quarter, clock, lineupsByQuarter],
+    () => calculateLineupStats(roster, stints, actionHistory, quarter, clock),
+    [roster, stints, actionHistory, quarter, clock],
   );
 
   // Find champions for highlighting

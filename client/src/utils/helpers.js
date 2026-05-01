@@ -56,7 +56,6 @@ export const calculateLineupStats = (
   actionHistory,
   currentQuarter,
   currentClock,
-  lineupsByQuarter = {},
 ) => {
   if (!stints || !Array.isArray(stints) || !roster || !actionHistory) {
     return [];
@@ -82,21 +81,6 @@ export const calculateLineupStats = (
 
     // Get all stints for this specific quarter
     const qStints = stints.filter((s) => Number(s.quarter) === q);
-
-    // 1. INITIALIZE COURT: Use the explicit snapshot if available
-    const snapshotLineup = lineupsByQuarter?.[q];
-    if (Array.isArray(snapshotLineup) && snapshotLineup.length === 5) {
-      snapshotLineup.forEach((id) => currentCourt.add(id));
-    } else {
-      // Fallback: Logic-based discovery for carry-overs
-      qStints.forEach((s) => {
-        if (Number(s.clockIn) === QUARTER_SECONDS) {
-          const cOut = s.clockOut !== null ? Number(s.clockOut) : -1;
-          if (cOut === -1 || cOut < QUARTER_SECONDS)
-            currentCourt.add(s.playerId);
-        }
-      });
-    }
 
     // 2. Collect all substitution events within this quarter
     const quarterEvents = [];

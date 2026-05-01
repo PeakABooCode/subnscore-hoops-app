@@ -67,16 +67,6 @@ export default function App() {
   });
   const [pendingSwapIds, setPendingSwapIds] = useState([]);
 
-  // Explicit snapshots of lineups at the start/end of each quarter
-  const [lineupsByQuarter, setLineupsByQuarter] = useState(() => {
-    try {
-      const saved = localStorage.getItem("subnscore_lineups");
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
-  });
-
   const [gameMode, setGameMode] = useState(() => {
     return localStorage.getItem("subnscore_gameMode") || "FULL"; // FULL, HALF, OPEN
   });
@@ -370,10 +360,6 @@ export default function App() {
     if (!isLoaded.current) return;
     localStorage.setItem("subnscore_timeouts", JSON.stringify(timeouts));
   }, [timeouts]);
-  useEffect(() => {
-    if (!isLoaded.current) return;
-    localStorage.setItem("subnscore_lineups", JSON.stringify(lineupsByQuarter));
-  }, [lineupsByQuarter]);
   useEffect(() => {
     if (!isLoaded.current) return;
     localStorage.setItem(
@@ -1040,7 +1026,6 @@ export default function App() {
     try {
       setCourt([]);
       setStints([]);
-      setLineupsByQuarter({});
     } catch (err) {
       console.error("Game Start Initialization Error:", err);
     }
@@ -1168,13 +1153,6 @@ export default function App() {
           quarter: coachingQuarter,
         });
       });
-
-      // Capture snapshot if this is the first lineup of the quarter
-      setLineupsByQuarter((prev) => ({
-        // This is for coaching lineups
-        ...prev,
-        [coachingQuarter]: onBenchSelected,
-      }));
 
       setStints(newStints);
       setCourt(newCourt);
@@ -1394,12 +1372,6 @@ export default function App() {
     // Strictly check for 'true' to ensure the modal is triggered.
     if (skipConfirm !== true) return setIsAdvanceQuarterConfirmOpen(true);
 
-    // ✅ SAVE CURRENT LINEUP SNAPSHOT BEFORE CLEARING
-    setLineupsByQuarter((prev) => ({
-      ...prev,
-      [coachingQuarter]: [...court],
-    }));
-
     // 1. Close current stints and record SUB_OUT actions for the logs
     const currentCourtPlayers = [...court];
     const updatedStints = stints.map((s) =>
@@ -1439,12 +1411,6 @@ export default function App() {
     const oppScore = actionHistory
       .filter((a) => a.type === "opp_score")
       .reduce((acc, curr) => acc + (curr.amount || 0), 0);
-
-    // Ensure the final quarter's lineup is snapshotted before payload creation
-    const finalLineups = {
-      ...lineupsByQuarter,
-      [coachingQuarter]: [...court],
-    };
 
     try {
       // Final Minutes and Seconds Calculation for the DB columns
@@ -1526,7 +1492,7 @@ export default function App() {
         finalScoreThem: oppScore,
         finalClock: coachingClock,
         quarter: coachingQuarter,
-        lineupsByQuarter: finalLineups, // Send to backend
+        lineupsByQuarter: {}, // Deprecated, payload placeholder
       };
 
       const res = await axios.post("/api/coaching/games/save", payload);
@@ -1547,14 +1513,7 @@ export default function App() {
   const loadGameFromHistory = async (gameId) => {
     try {
       const res = await axios.get(`/api/coaching/games/${gameId}`);
-      const {
-        game,
-        stats,
-        logs,
-        quarterStats,
-        substitutionLogs,
-        lineupsByQuarter: savedLineups,
-      } = res.data;
+      const { game, stats, logs, quarterStats, substitutionLogs } = res.data;
 
       const historicalRoster = stats.map((s) => ({
         id: s.player_id,
@@ -1579,7 +1538,6 @@ export default function App() {
         quarter: l.quarter,
         clock: Number(l.time_remaining),
       }));
-      const historicalLineups = savedLineups || {};
 
       // RECONSTRUCT STINTS from substitution logs
       const reconstructedStints = [];
@@ -1684,7 +1642,6 @@ export default function App() {
         stints: filteredStints,
         quarterStats: hQuarterStats,
         quarter: game.quarter || 1,
-        lineupsByQuarter: historicalLineups,
       });
       setView("STATS");
     } catch (err) {
@@ -2031,10 +1988,6 @@ export default function App() {
             historyQuarterStats={historyData?.quarterStats}
             gameMode={
               historyData ? historyData.meta.game_mode || "FULL" : gameMode
-            }
-            lineupsByQuarter={
-              // This is for coaching lineups
-              historyData ? historyData.lineupsByQuarter : lineupsByQuarter
             }
           />
         )}
