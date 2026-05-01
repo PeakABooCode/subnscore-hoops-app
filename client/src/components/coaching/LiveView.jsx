@@ -190,6 +190,18 @@ export default function LiveView({
             )}
           </div>
 
+          {court.length === 0 && (
+            <div className="py-12 text-center border-2 border-dashed border-blue-300 bg-blue-50/50 rounded-2xl shadow-inner">
+              <Users
+                size={32}
+                className="mx-auto text-blue-400 mb-3 opacity-50"
+              />
+              <p className="text-sm text-blue-600 font-black uppercase tracking-widest animate-pulse">
+                Select 5 Starters from the Bench
+              </p>
+            </div>
+          )}
+
           {court.map((id) => {
             const p = roster.find((r) => r.id === id);
             // Safety check: if player not found in roster, skip rendering to prevent crash

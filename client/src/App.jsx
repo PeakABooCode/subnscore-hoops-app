@@ -236,7 +236,9 @@ export default function App() {
   const [committeeKeybindings, setCommitteeKeybindings] = useState(() => {
     try {
       const saved = localStorage.getItem("subnscore_committeeKeybindings");
-      return saved ? JSON.parse(saved) : DEFAULT_COMMITTEE_KEYBINDINGS;
+      return saved
+        ? { ...DEFAULT_COMMITTEE_KEYBINDINGS, ...JSON.parse(saved) }
+        : DEFAULT_COMMITTEE_KEYBINDINGS;
     } catch {
       return DEFAULT_COMMITTEE_KEYBINDINGS;
     }
@@ -1034,17 +1036,9 @@ export default function App() {
 
     // NEW GAME INITIALIZATION
     try {
-      const starters = roster.slice(0, 5).map((p) => p.id);
-      setCourt(starters);
-      setStints(
-        starters.map((id) => ({
-          id: Math.random().toString(),
-          playerId: id,
-          quarter: coachingQuarter,
-          clockIn: QUARTER_SECONDS,
-          clockOut: null,
-        })),
-      );
+      setCourt([]);
+      setStints([]);
+      setLineupsByQuarter({});
     } catch (err) {
       console.error("Game Start Initialization Error:", err);
     }
@@ -1872,8 +1866,9 @@ export default function App() {
             availableTeams={availableTeams}
             onGameStart={(data) => {
               // Force reset all committee session-specific states for a fresh start
+              const qMins = data.quarterDuration || 10;
               setCommitteeQuarter(1);
-              setCommitteeClock(QUARTER_SECONDS);
+              setCommitteeClock(qMins * 60);
               setIsCommitteeRunning(false);
               setCommitteePossessionArrow(null);
               setCommitteeLogs([]);
@@ -1915,7 +1910,7 @@ export default function App() {
             onGameSaved={() => {
               setCommitteeGameData(null);
               setCommitteeQuarter(1);
-              setCommitteeClock(QUARTER_SECONDS);
+              setCommitteeClock(10 * 60); // Reset fallback
               setIsCommitteeRunning(false);
               setCommitteePossessionArrow(null);
               setCommitteeLogs([]);
@@ -2056,7 +2051,7 @@ export default function App() {
             // Clear active game and reset all session states
             setCommitteeGameData(null);
             setCommitteeQuarter(1);
-            setCommitteeClock(QUARTER_SECONDS);
+            setCommitteeClock(10 * 60); // Reset fallback
             setIsCommitteeRunning(false);
             setCommitteePossessionArrow(null);
             setCommitteeLogs([]);

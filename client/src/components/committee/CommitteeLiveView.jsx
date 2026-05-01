@@ -23,6 +23,7 @@ import {
   Settings,
   BellRing,
   UserPlus,
+  Trash2,
 } from "lucide-react";
 import { formatTime } from "../../utils/helpers";
 import KeyboardSettingsModal from "./KeyboardSettingsModal";
@@ -74,6 +75,8 @@ export default function CommitteeLiveView({
 
   const buzzerRef = useRef(null);
   const hornRef = useRef(null);
+
+  const quarterSeconds = (initialData.quarterDuration || 10) * 60;
 
   // --- FIBA Timeout Logic ---
   const maxTimeouts = quarter <= 2 ? 2 : quarter <= 4 ? 3 : 1;
@@ -606,7 +609,7 @@ export default function CommitteeLiveView({
       winner,
       arrow: arrowPointsTo,
       quarter: 1,
-      clock: 600,
+      clock: quarterSeconds,
     });
   };
 
@@ -633,7 +636,7 @@ export default function CommitteeLiveView({
         to: nextArrow,
         team: gettingPossession,
         quarter: nextQ,
-        clock: 600,
+        clock: quarterSeconds,
       });
     } else {
       // Q1 end: arrow team hasn't used their possession yet (they get the Q2 ball), so don't flip
@@ -641,7 +644,7 @@ export default function CommitteeLiveView({
     }
 
     setQuarter((prev) => prev + 1);
-    setClock(600); // Reset clock for new quarter
+    setClock(quarterSeconds); // Reset clock for new quarter
     setShotClock(24); // Reset shot clock for new quarter
   };
 
@@ -837,6 +840,14 @@ export default function CommitteeLiveView({
               </span>
               <div className="flex gap-2">
                 <button
+                  onClick={onBack}
+                  className="p-1.5 px-3 bg-red-950/40 hover:bg-red-900/60 border border-red-900/50 rounded-lg text-red-500 transition-colors flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest"
+                  title="Discard Scoresheet"
+                >
+                  <Trash2 size={14} />{" "}
+                  <span className="hidden sm:inline">Discard</span>
+                </button>
+                <button
                   onClick={openExternalScoreboard}
                   className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-amber-500 transition-colors"
                   title="Open Scoreboard Window"
@@ -912,7 +923,7 @@ export default function CommitteeLiveView({
                   <button
                     onClick={() => {
                       setIsRunning(false);
-                      setClock(600);
+                      setClock(quarterSeconds);
                       triggerShotClockPulse(24);
                     }}
                     className="p-2.5 bg-slate-900 border-2 border-slate-700 hover:border-amber-500 rounded-2xl text-slate-400 hover:text-amber-500 transition-all group shadow-inner"
@@ -1118,7 +1129,7 @@ export default function CommitteeLiveView({
           </div>
 
           {/* Period Advance & Save */}
-          <div className="bg-slate-800/50 rounded-2xl p-3 flex flex-col justify-between gap-3 border border-slate-700">
+          <div className="bg-slate-800/50 rounded-2xl p-3 flex flex-col justify-between gap-3 border border-slate-700 shrink-0">
             <button
               onClick={() => setIsAdvanceQuarterConfirmOpen(true)}
               className="w-full bg-slate-700 border-2 border-slate-600 hover:border-slate-500 py-4 rounded-2xl font-black uppercase text-sm transition-all flex items-center justify-center gap-3 shadow-sm text-white"
@@ -1132,13 +1143,6 @@ export default function CommitteeLiveView({
             >
               <Save size={24} />
               Finish & Save Game
-            </button>
-
-            <button
-              onClick={onBack}
-              className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-red-500 flex items-center justify-center gap-2"
-            >
-              <ChevronLeft size={12} /> Discard Scoresheet
             </button>
           </div>
         </div>
