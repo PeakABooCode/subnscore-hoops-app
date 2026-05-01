@@ -1492,7 +1492,7 @@ export default function App() {
         finalScoreThem: oppScore,
         finalClock: coachingClock,
         quarter: coachingQuarter,
-        lineupsByQuarter: {}, // Deprecated, payload placeholder
+        lineupsByQuarter: stints, // Save the direct stints array as the source of truth
       };
 
       const res = await axios.post("/api/coaching/games/save", payload);
@@ -1540,106 +1540,86 @@ export default function App() {
       }));
 
       // RECONSTRUCT STINTS from substitution logs
-      const reconstructedStints = [];
-      const rawSubs = substitutionLogs || [];
-      const hQuarterStats = quarterStats || [];
+      let finalStints = [];
 
-      // Loop through each quarter to build stints
-      for (let q = 1; q <= (game.quarter || 4); q++) {
-        const qLogs = rawSubs.filter((l) => l.quarter === q);
+      // 1. Directly use stints if they were saved successfully in newer versions
+      if (Array.isArray(savedLineups) && savedLineups.length > 0) {
+        finalStints = savedLineups.map((s) => ({ ...s, isHistory: true }));
+      } else {
+        // 2. Fallback: Reconstruct stints for older game records
+        const reconstructedStints = [];
+        const rawSubs = substitutionLogs || [];
+        const hQuarterStats = quarterStats || [];
 
-        // IMPROVEMENT: Find players by checking stats OR actions OR direct sub logs
-        const statsPlayers = hQuarterStats
-          .filter((qs) => qs.quarter === q)
-          .map((qs) => qs.player_id || qs.playerId);
-        const logPlayers = historicalActions
-          .filter((a) => a.quarter === q && a.playerId)
-          .map((a) => a.playerId);
-        const subPlayers = qLogs.map((l) => l.player_id || l.playerId);
+        for (let q = 1; q <= (game.quarter || 4); q++) {
+          const qLogs = rawSubs.filter((l) => l.quarter === q);
+          const statsPlayers = hQuarterStats
+            .filter((qs) => qs.quarter === q)
+            .map((qs) => qs.player_id || qs.playerId);
+          const logPlayers = historicalActions
+            .filter((a) => a.quarter === q && a.playerId)
+            .map((a) => a.playerId);
+          const subPlayers = qLogs.map((l) => l.player_id || l.playerId);
 
-        const playersInQ = Array.from(
-          new Set([...statsPlayers, ...logPlayers, ...subPlayers]),
-        );
+          const playersInQ = Array.from(
+            new Set([...statsPlayers, ...logPlayers, ...subPlayers]),
+          );
 
-        playersInQ.forEach((pId) => {
-          const pLogs = qLogs
-            .filter((l) => (l.player_id || l.playerId) === pId)
-            .sort((a, b) => b.time_remaining - a.time_remaining); // Chronological start to end
+          playersInQ.forEach((pId) => {
+            const pLogs = qLogs
+              .filter((l) => (l.player_id || l.playerId) === pId)
+              .sort(
+                (a, b) => Number(b.time_remaining) - Number(a.time_remaining),
+              );
+            let lastIn = null;
+            if (pLogs.length === 0 || pLogs[0].action_type === "OUT") {
+              lastIn = QUARTER_SECONDS;
+            }
 
-          let lastIn = null;
+            pLogs.forEach((log) => {
+              const time = Number(log.time_remaining);
+              if (log.action_type === "IN") {
+                lastIn = time;
+              } else if (log.action_type === "OUT") {
+                if (lastIn !== null) {
+                  reconstructedStints.push({
+                    id: `hist-${q}-${pId}-${time}`,
+                    playerId: pId,
+                    quarter: q,
+                    clockIn: lastIn,
+                    clockOut: time,
+                    isHistory: true,
+                  });
+                  lastIn = null;
+                }
+              }
+            });
 
-          // If they played but no IN log at 10:00, or first log is OUT, they started the quarter
-          if (
-            pLogs.length === 0 ||
-            pLogs[0].action_type !== "IN" ||
-            Number(pLogs[0].time_remaining) < QUARTER_SECONDS
-          ) {
-            lastIn = QUARTER_SECONDS;
-          }
-
-          pLogs.forEach((log) => {
-            const time = Number(log.time_remaining);
-            if (log.action_type === "IN") {
-              lastIn = time;
-            } else if (log.action_type === "OUT") {
+            if (lastIn !== null) {
+              const effectiveOut =
+                q === (game.quarter || 4) ? Number(game.final_clock || 0) : 0;
               reconstructedStints.push({
-                id: `hist-${q}-${pId}-${time}`,
+                id: `hist-${q}-${pId}-end`,
                 playerId: pId,
                 quarter: q,
-                clockIn: lastIn !== null ? lastIn : QUARTER_SECONDS,
-                clockOut: time,
+                clockIn: lastIn,
+                clockOut: effectiveOut,
+                isHistory: true,
               });
-              lastIn = null;
             }
           });
-
-          // If still marked as IN, they played to the end of the quarter
-          if (lastIn !== null) {
-            // Use the actual seconds_played from the DB to find the exact exit time
-            const qStat = hQuarterStats.find(
-              (qs) =>
-                (qs.player_id === pId || qs.playerId === pId) &&
-                Number(qs.quarter) === q,
-            );
-
-            const totalSecsInQ = qStat
-              ? Number(qStat.seconds_played || qStat.secondsPlayed || 0)
-              : 0;
-
-            // Account for any mid-quarter subs already processed
-            const accounted = reconstructedStints
-              .filter((s) => s.playerId === pId && s.quarter === q)
-              .reduce(
-                (sum, s) => sum + (Number(s.clockIn) - Number(s.clockOut)),
-                0,
-              );
-
-            const remainingToPlay = Math.max(0, totalSecsInQ - accounted);
-            const effectiveOut = Math.max(0, lastIn - remainingToPlay);
-
-            reconstructedStints.push({
-              id: `hist-${q}-${pId}-end`,
-              playerId: pId,
-              quarter: q,
-              clockIn: lastIn,
-              clockOut: effectiveOut,
-              isHistory: true,
-            });
-          }
-        });
+        }
+        finalStints = reconstructedStints.filter(
+          (s) => Number(s.clockIn) > Number(s.clockOut),
+        );
       }
-
-      // CRITICAL: Filter out zero-duration stints to prevent court bloating (e.g. 10 players on court)
-      const filteredStints = reconstructedStints.filter(
-        (s) => Number(s.clockIn) > Number(s.clockOut),
-      );
 
       setHistoryData({
         meta: { ...game, teamName: game.team_name || teamMeta.teamName },
         roster: historicalRoster,
         stats: historicalStats,
         actions: historicalActions,
-        stints: filteredStints,
+        stints: finalStints,
         quarterStats: hQuarterStats,
         quarter: game.quarter || 1,
       });

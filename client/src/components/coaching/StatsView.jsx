@@ -115,36 +115,29 @@ export default function StatsView({
 
   const quarterData = useMemo(() => {
     const quarters = {};
-    for (let i = 1; i <= quarter; i++) {
+    const maxQ = Math.max(quarter, ...stints.map((s) => s.quarter));
+    for (let i = 1; i <= maxQ; i++) {
       quarters[i] = [];
     }
 
-    // If we have pre-calculated quarter stats, use those as they are the most accurate
-    if (isHistory && historyQuarterStats) {
-      historyQuarterStats.forEach((qs) => {
-        const q = qs.quarter;
-        const pId = qs.player_id || qs.playerId;
-        if (quarters[q] && !quarters[q].includes(pId)) {
-          quarters[q].push(pId);
-        }
-      });
-    } else if (isHistory) {
-      actionHistory.forEach((action) => {
+    stints.forEach((stint) => {
+      if (!quarters[stint.quarter]) quarters[stint.quarter] = [];
+      if (!quarters[stint.quarter].includes(stint.playerId)) {
+        quarters[stint.quarter].push(stint.playerId);
+      }
+    });
+
+    // Ensure players with actions are also included just in case they had no measurable stint
+    actionHistory.forEach((action) => {
+      if (action.playerId && action.quarter) {
         if (!quarters[action.quarter]) quarters[action.quarter] = [];
         if (!quarters[action.quarter].includes(action.playerId)) {
           quarters[action.quarter].push(action.playerId);
         }
-      });
-    } else {
-      stints.forEach((stint) => {
-        if (!quarters[stint.quarter]) quarters[stint.quarter] = [];
-        if (!quarters[stint.quarter].includes(stint.playerId)) {
-          quarters[stint.quarter].push(stint.playerId);
-        }
-      });
-    }
+      }
+    });
     return quarters;
-  }, [quarter, isHistory, historyQuarterStats, actionHistory, stints]);
+  }, [quarter, actionHistory, stints]);
 
   const getQuarterStats = (
     playerId,
@@ -170,40 +163,15 @@ export default function StatsView({
       }
     });
 
-    // Calculate playing time for this specific player in this specific quarter
-    if (
-      isHistory &&
-      historyQuarterStats &&
-      startLimit === QUARTER_SECONDS &&
-      endLimit === 0
-    ) {
-      const qs = historyQuarterStats.find(
-        (s) =>
-          (s.player_id === playerId || s.playerId === playerId) &&
-          s.quarter === qtr,
-      );
-      if (qs) {
-        // Ensure points, fouls, etc. are used from the record if found
-        const rawSecs = qs.seconds_played ?? qs.secondsPlayed ?? 0;
-        return {
-          qPts: qs.points,
-          qFls: qs.fouls,
-          qTOs: qs.turnovers,
-          qTime: formatTime(Number(rawSecs)),
-        };
-      }
-    } else if (stints) {
-      // Live game calculation using stints
-      stints
-        .filter((s) => s.playerId === playerId && s.quarter === qtr)
-        .forEach((s) => {
-          const sOut =
-            s.clockOut !== null ? s.clockOut : qtr === quarter ? clock : 0;
-          const overlapIn = Math.min(startLimit, s.clockIn);
-          const overlapOut = Math.max(endLimit, sOut);
-          if (overlapIn > overlapOut) qSecs += overlapIn - overlapOut;
-        });
-    }
+    stints
+      .filter((s) => s.playerId === playerId && s.quarter === qtr)
+      .forEach((s) => {
+        const sOut =
+          s.clockOut !== null ? s.clockOut : qtr === quarter ? clock : 0;
+        const overlapIn = Math.min(startLimit, s.clockIn);
+        const overlapOut = Math.max(endLimit, sOut);
+        if (overlapIn > overlapOut) qSecs += overlapIn - overlapOut;
+      });
 
     return { qPts, qFls, qTOs, qTime: formatTime(qSecs), rawSecs: qSecs };
   };
