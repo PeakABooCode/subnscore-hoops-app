@@ -132,10 +132,21 @@ export default function LiveView({
           <div className="flex items-center justify-between pt-2 border-t border-slate-800 gap-2">
             <div className="flex gap-2">
               <button
-                title={isRunning ? "Pause Clock" : "Start Clock"}
+                title={
+                  court.length !== 5
+                    ? "Select 5 players to start"
+                    : isRunning
+                      ? "Pause Clock"
+                      : "Start Clock"
+                }
                 onClick={() => setIsRunning(!isRunning)}
-                className={`h-10 px-4 md:px-6 rounded-xl transition-all shadow-lg active:scale-95 flex items-center gap-2 ${
-                  isRunning ? "bg-red-500" : "bg-emerald-500"
+                disabled={court.length !== 5}
+                className={`h-10 px-4 md:px-6 rounded-xl transition-all shadow-lg flex items-center gap-2 ${
+                  court.length !== 5
+                    ? "bg-slate-600 text-slate-400 cursor-not-allowed opacity-50"
+                    : isRunning
+                      ? "bg-red-500 active:scale-95"
+                      : "bg-emerald-500 active:scale-95"
                 }`}
               >
                 {isRunning ? (

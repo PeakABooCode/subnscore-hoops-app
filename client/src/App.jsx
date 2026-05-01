@@ -1478,6 +1478,11 @@ export default function App() {
         });
       }
 
+      // Close any active stints for the final save payload
+      const closedStints = stints.map((s) =>
+        s.clockOut === null ? { ...s, clockOut: coachingClock } : s,
+      );
+
       const payload = {
         teamMeta: {
           ...teamMeta,
@@ -1492,7 +1497,7 @@ export default function App() {
         finalScoreThem: oppScore,
         finalClock: coachingClock,
         quarter: coachingQuarter,
-        lineupsByQuarter: stints, // Save the direct stints array as the source of truth
+        lineupsByQuarter: closedStints, // Save the closed stints array as the source of truth
       };
 
       const res = await axios.post("/api/coaching/games/save", payload);
@@ -1548,6 +1553,7 @@ export default function App() {
 
       // RECONSTRUCT STINTS from substitution logs
       let finalStints = [];
+      const hQuarterStats = quarterStats || [];
 
       // 1. Directly use stints if they were saved successfully in newer versions
       if (Array.isArray(savedLineups) && savedLineups.length > 0) {
@@ -1556,7 +1562,6 @@ export default function App() {
         // 2. Fallback: Reconstruct stints for older game records
         const reconstructedStints = [];
         const rawSubs = substitutionLogs || [];
-        const hQuarterStats = quarterStats || [];
 
         for (let q = 1; q <= (game.quarter || 4); q++) {
           const qLogs = rawSubs.filter((l) => l.quarter === q);
