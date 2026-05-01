@@ -402,13 +402,11 @@ export default function LiveView({
             </button>
           </div>
 
-          {/* Advance Quarter (Tablet/Mobile Only Button - shown inside sidebar) */}
+          {/* Advance Quarter Button */}
           <button
             onClick={() => advanceQuarter()}
-            className="md:hidden w-full py-4 bg-slate-200 text-slate-800 rounded-xl font-black text-xs uppercase tracking-widest"
+            className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg transition-all active:scale-95"
           >
-            {" "}
-            {/* advanceQuarter is now a function that triggers the modal */}
             Advance to {nextShortPeriodName}
           </button>
         </div>

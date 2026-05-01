@@ -290,6 +290,8 @@ export default function App() {
   const gameInProgress =
     stints.length > 0 ||
     actionHistory.length > 0 ||
+    (view === "LIVE" && roster.length >= 5) ||
+    (teamMeta?.teamName && teamMeta?.opponent && roster.length >= 5) ||
     Object.keys(playerStats).some((id) => {
       const s = playerStats[id];
       // If any player has recorded stats, the game is in progress
@@ -1110,7 +1112,7 @@ export default function App() {
 
   // --- Live Action Handlers --- //
   const handleSwap = (playerId) => {
-    if (isRunning) return showNotification("Pause clock to sub!");
+    if (isCoachingRunning) return showNotification("Pause clock to sub!");
 
     const isAlreadySelected = pendingSwapIds.includes(playerId);
     let nextSelected;
@@ -1155,11 +1157,16 @@ export default function App() {
           id: Math.random().toString(),
           playerId: pIn,
           quarter: coachingQuarter,
-          clockIn: clock,
+          clockIn: coachingClock,
           clockOut: null,
         });
         newCourt.push(pIn);
-        newActions.push({ type: "SUB_IN", playerId: pIn, clock, quarter });
+        newActions.push({
+          type: "SUB_IN",
+          playerId: pIn,
+          clock: coachingClock,
+          quarter: coachingQuarter,
+        });
       });
 
       // Capture snapshot if this is the first lineup of the quarter
@@ -1194,7 +1201,7 @@ export default function App() {
         newStints.push({
           id: Math.random().toString(),
           playerId: pIn,
-          quarter,
+          quarter: coachingQuarter,
           clockIn: coachingClock,
           clockOut: null,
         });
@@ -1205,8 +1212,18 @@ export default function App() {
 
         // 4. Record history
         newActions.push(
-          { type: "SUB_IN", playerId: pIn, clock: coachingClock, quarter },
-          { type: "SUB_OUT", playerId: pOut, clock: coachingClock, quarter },
+          {
+            type: "SUB_IN",
+            playerId: pIn,
+            clock: coachingClock,
+            quarter: coachingQuarter,
+          },
+          {
+            type: "SUB_OUT",
+            playerId: pOut,
+            clock: coachingClock,
+            quarter: coachingQuarter,
+          },
         );
       });
       setStints(newStints);
@@ -1963,11 +1980,18 @@ export default function App() {
             teamFouls={teamFouls}
             timeouts={timeouts}
             addTimeout={() => {
-              setTimeouts([...timeouts, { quarter, clock: coachingClock }]);
+              setTimeouts([
+                ...timeouts,
+                { quarter: coachingQuarter, clock: coachingClock },
+              ]);
               setIsCoachingRunning(false);
               setActionHistory((prev) => [
                 ...prev,
-                { type: "TIMEOUT", quarter, clock: coachingClock },
+                {
+                  type: "TIMEOUT",
+                  quarter: coachingQuarter,
+                  clock: coachingClock,
+                },
               ]);
             }}
             undoLastAction={undoLastAction}

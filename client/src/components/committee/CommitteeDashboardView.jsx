@@ -12,6 +12,8 @@ import {
   ChevronRight,
   List,
   Edit2,
+  Search,
+  Clock,
 } from "lucide-react";
 import TeamSelectionModal from "../common/TeamSelectionModal";
 import OfficialGameDetailsModal from "./OfficialGameDetailsModal";
@@ -29,6 +31,13 @@ export default function CommitteeDashboardView({
   const [season, setSeason] = useState("");
   const [division, setDivision] = useState("");
   const [setupAttempted, setSetupAttempted] = useState(false);
+  const [quarterDuration, setQuarterDuration] = useState("10"); // Default 10 minutes
+
+  const [searchLeague, setSearchLeague] = useState("");
+  const [searchSeason, setSearchSeason] = useState("");
+  const [searchDivision, setSearchDivision] = useState("");
+  const [searchDateFrom, setSearchDateFrom] = useState("");
+  const [searchDateTo, setSearchDateTo] = useState("");
 
   const [historyGames, setHistoryGames] = useState([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
@@ -315,12 +324,52 @@ export default function CommitteeDashboardView({
         teamBRoster: teamB.roster,
         teamAPlayerMap: res.data.teamAPlayerMap,
         teamBPlayerMap: res.data.teamBPlayerMap,
+        quarterDuration: parseInt(quarterDuration, 10) || 10,
       });
     } catch (err) {
       console.error("Initialization error:", err);
       showNotification(err.response?.data?.error || "Failed to start game.");
     }
   };
+
+  // Apply History Filters
+  const filteredHistoryGames = useMemo(() => {
+    return historyGames.filter((game) => {
+      const matchLeague =
+        !searchLeague ||
+        game.league?.toLowerCase().includes(searchLeague.toLowerCase());
+      const matchSeason =
+        !searchSeason ||
+        game.season
+          ?.toString()
+          .toLowerCase()
+          .includes(searchSeason.toLowerCase());
+      const matchDivision =
+        !searchDivision ||
+        game.division?.toLowerCase().includes(searchDivision.toLowerCase());
+
+      let matchDate = true;
+      if (searchDateFrom || searchDateTo) {
+        const gameDate = new Date(game.game_date).getTime();
+        const fromTime = searchDateFrom
+          ? new Date(searchDateFrom).getTime()
+          : 0;
+        const toTime = searchDateTo
+          ? new Date(searchDateTo).getTime() + 86400000
+          : Infinity; // Include end of day
+        matchDate = gameDate >= fromTime && gameDate <= toTime;
+      }
+
+      return matchLeague && matchSeason && matchDivision && matchDate;
+    });
+  }, [
+    historyGames,
+    searchLeague,
+    searchSeason,
+    searchDivision,
+    searchDateFrom,
+    searchDateTo,
+  ]);
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -373,19 +422,73 @@ export default function CommitteeDashboardView({
               Official Records
             </h2>
 
+            {/* History Filters */}
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 mb-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="relative">
+                <Search
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+                <input
+                  placeholder="League..."
+                  value={searchLeague}
+                  onChange={(e) => setSearchLeague(e.target.value)}
+                  className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-amber-400"
+                />
+              </div>
+              <div className="relative">
+                <Search
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+                <input
+                  placeholder="Division..."
+                  value={searchDivision}
+                  onChange={(e) => setSearchDivision(e.target.value)}
+                  className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-amber-400"
+                />
+              </div>
+              <div className="relative">
+                <Search
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+                <input
+                  placeholder="Season..."
+                  value={searchSeason}
+                  onChange={(e) => setSearchSeason(e.target.value)}
+                  className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-amber-400"
+                />
+              </div>
+              <input
+                type="date"
+                value={searchDateFrom}
+                onChange={(e) => setSearchDateFrom(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-amber-400 text-slate-500"
+                title="From Date"
+              />
+              <input
+                type="date"
+                value={searchDateTo}
+                onChange={(e) => setSearchDateTo(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-amber-400 text-slate-500"
+                title="To Date"
+              />
+            </div>
+
             {isLoadingHistory ? (
               <div className="py-20 text-center animate-pulse text-slate-400 font-bold uppercase tracking-widest">
                 Loading Records...
               </div>
-            ) : historyGames.length === 0 ? (
+            ) : filteredHistoryGames.length === 0 ? (
               <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-3xl">
                 <p className="text-slate-300 font-black uppercase tracking-widest italic">
-                  No official games saved yet.
+                  No records match your search.
                 </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {historyGames.map((game) => (
+                {filteredHistoryGames.map((game) => (
                   <div
                     key={game.id}
                     onClick={() => handleViewDetails(game.id)}
@@ -462,7 +565,7 @@ export default function CommitteeDashboardView({
               <Trophy className="text-amber-500" size={24} />
               Tournament Details
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
               {/* League Name Input with Suggestions */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black uppercase text-slate-500 ml-1">
@@ -618,6 +721,27 @@ export default function CommitteeDashboardView({
                       ))}
                     </div>
                   )}
+                </div>
+              </div>
+
+              {/* Quarter Duration Input */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase text-slate-500 ml-1">
+                  Quarter Mins
+                </label>
+                <div className="relative">
+                  <Clock
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                    size={18}
+                  />
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm font-bold transition-all focus:ring-4 focus:ring-slate-100"
+                    value={quarterDuration}
+                    onChange={(e) => setQuarterDuration(e.target.value)}
+                  />
                 </div>
               </div>
             </div>
