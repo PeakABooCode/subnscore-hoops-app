@@ -350,7 +350,7 @@ export default function StatsView({
           }`}
         >
           <Clock size={16} className="md:w-[18px] md:h-[18px]" />{" "}
-          <span className="truncate">Quarters</span>
+          <span className="truncate">Rotations</span>
         </button>
         <button
           onClick={() => setActiveTab("timeline")}

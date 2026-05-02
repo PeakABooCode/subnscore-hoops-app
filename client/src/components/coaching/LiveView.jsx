@@ -196,44 +196,96 @@ export default function LiveView({
     };
   }, [court, stints, actionHistory, clock, quarter]);
 
-  // 🤝 ASSISTED SUB MODE: When exactly one bench player is tapped, score each court player
-  // and surface the best sub-out candidate with a reason.
+  // 🤝 ASSISTED SUB MODE: Works in both directions.
+  // Bench-first → suggest best court player to come OUT.
+  // Court-first → suggest best bench player to come IN.
   const assistedSuggestion = useMemo(() => {
     if (pendingSwapIds.length !== 1 || court.length !== 5) return null;
-    const benchId = pendingSwapIds[0];
-    if (court.includes(benchId)) return null; // a court player was tapped first — no suggestion needed
+    const pendingId = pendingSwapIds[0];
+    const isCourtFirst = court.includes(pendingId);
 
-    const scored = court.map((courtId) => {
-      const stats = playerStats[courtId] || { fouls: 0, turnovers: 0 };
-      const timePlayed = playerTimes?.[courtId] || 0;
-      const pm = playerPlusMinus[courtId] || 0;
+    if (!isCourtFirst) {
+      // ── BENCH PLAYER TAPPED ── find best sub-out from court
+      const benchId = pendingId;
+      const scored = court.map((courtId) => {
+        const stats = playerStats[courtId] || { fouls: 0, turnovers: 0 };
+        const timePlayed = playerTimes?.[courtId] || 0;
+        const pm = playerPlusMinus[courtId] || 0;
+        const score =
+          (stats.fouls || 0) * 30 +
+          timePlayed / 10 +
+          Math.max(0, -pm) * 5 +
+          (stats.turnovers || 0) * 8;
+        let reason;
+        if ((stats.fouls || 0) >= 4) reason = `${stats.fouls} fouls`;
+        else if ((stats.fouls || 0) >= 3) reason = "Foul risk";
+        else if (pm < -2) reason = `${pm} +/-`;
+        else reason = `${formatTime(timePlayed)} on court`;
+        return { courtId, score, reason };
+      });
+      scored.sort((a, b) => b.score - a.score);
+      const best = scored[0];
+      return {
+        type: "bench_first",
+        benchId,
+        courtId: best.courtId,
+        reason: best.reason,
+        benchPlayer: roster.find((p) => p.id === benchId),
+        courtPlayer: roster.find((p) => p.id === best.courtId),
+      };
+    } else {
+      // ── COURT PLAYER TAPPED ── find best sub-in from bench
+      const courtId = pendingId;
+      const benchPlayers = roster.filter(
+        (p) => !court.includes(p.id) && (playerStats[p.id]?.fouls || 0) < 5,
+      );
+      if (benchPlayers.length === 0) return null;
 
-      const score =
-        (stats.fouls || 0) * 30 +
-        timePlayed / 10 +
-        Math.max(0, -pm) * 5 +
-        (stats.turnovers || 0) * 8;
-
-      let reason;
-      if ((stats.fouls || 0) >= 4) reason = `${stats.fouls} fouls`;
-      else if ((stats.fouls || 0) >= 3) reason = "Foul risk";
-      else if (pm < -2) reason = `${pm} +/-`;
-      else reason = `${formatTime(timePlayed)} on court`;
-
-      return { courtId, score, reason };
-    });
-
-    scored.sort((a, b) => b.score - a.score);
-    const best = scored[0];
-
-    return {
-      benchId,
-      courtId: best.courtId,
-      reason: best.reason,
-      benchPlayer: roster.find((p) => p.id === benchId),
-      courtPlayer: roster.find((p) => p.id === best.courtId),
-    };
-  }, [pendingSwapIds, court, playerStats, playerTimes, playerPlusMinus, roster]);
+      const scored = benchPlayers.map((p) => {
+        const stats = playerStats[p.id] || { fouls: 0, turnovers: 0 };
+        const pm = playerPlusMinus[p.id] || 0;
+        // Compute rest time inline (same logic as calculateRestTime)
+        const pStints = stints.filter((s) => s.playerId === p.id);
+        let restSecs = 0;
+        if (pStints.length === 0) {
+          for (let q = 1; q < quarter; q++) restSecs += QUARTER_SECONDS;
+          restSecs += QUARTER_SECONDS - clock;
+        } else {
+          const last = pStints[pStints.length - 1];
+          if (last.clockOut !== null) {
+            if (last.quarter === quarter) {
+              restSecs = last.clockOut - clock;
+            } else {
+              restSecs += last.clockOut;
+              for (let q = last.quarter + 1; q < quarter; q++) restSecs += QUARTER_SECONDS;
+              restSecs += QUARTER_SECONDS - clock;
+            }
+          }
+        }
+        const score =
+          restSecs / 10 +
+          Math.max(0, 4 - (stats.fouls || 0)) * 20 +
+          Math.max(0, pm) * 5 +
+          Math.max(0, 3 - (stats.turnovers || 0)) * 5;
+        let reason;
+        if (restSecs > 240) reason = `${formatTime(restSecs)} rested`;
+        else if (pm > 2) reason = `+${pm} +/-`;
+        else if ((stats.fouls || 0) === 0) reason = "Clean game";
+        else reason = `${formatTime(restSecs)} rested`;
+        return { benchId: p.id, score, reason };
+      });
+      scored.sort((a, b) => b.score - a.score);
+      const best = scored[0];
+      return {
+        type: "court_first",
+        benchId: best.benchId,
+        courtId,
+        reason: best.reason,
+        benchPlayer: roster.find((p) => p.id === best.benchId),
+        courtPlayer: roster.find((p) => p.id === courtId),
+      };
+    }
+  }, [pendingSwapIds, court, playerStats, playerTimes, playerPlusMinus, roster, stints, quarter, clock]);
 
   // ⏱️ REST TIMER: This is crucial for coaches to manage player fatigue.
   // It finds the last time a bench player was subbed out, and compares it to the current game clock.
@@ -473,27 +525,49 @@ export default function LiveView({
 
           {/* 🤝 ASSISTED SUB BANNER */}
           {assistedSuggestion && (
-            <div className="bg-blue-600 text-white rounded-2xl p-4 shadow-lg border border-blue-500 animate-pulse-once">
+            <div className="bg-blue-600 text-white rounded-2xl p-4 shadow-lg border border-blue-500">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <span className="text-[9px] font-black text-blue-200 uppercase tracking-[0.2em]">
                     Assisted Sub
                   </span>
-                  <div className="font-black text-base leading-tight mt-0.5 truncate">
-                    #{assistedSuggestion.benchPlayer?.jersey}{" "}
-                    {assistedSuggestion.benchPlayer?.name}{" "}
-                    <span className="text-blue-300">IN</span>
-                  </div>
-                  <div className="text-sm text-blue-100 mt-0.5 truncate">
-                    → Out: #{assistedSuggestion.courtPlayer?.jersey}{" "}
-                    {assistedSuggestion.courtPlayer?.name}
-                  </div>
+                  {assistedSuggestion.type === "bench_first" ? (
+                    <>
+                      <div className="font-black text-base leading-tight mt-0.5 truncate">
+                        #{assistedSuggestion.benchPlayer?.jersey}{" "}
+                        {assistedSuggestion.benchPlayer?.name}{" "}
+                        <span className="text-blue-300">IN</span>
+                      </div>
+                      <div className="text-sm text-blue-100 mt-0.5 truncate">
+                        → Suggested OUT: #{assistedSuggestion.courtPlayer?.jersey}{" "}
+                        {assistedSuggestion.courtPlayer?.name}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="font-black text-base leading-tight mt-0.5 truncate">
+                        #{assistedSuggestion.courtPlayer?.jersey}{" "}
+                        {assistedSuggestion.courtPlayer?.name}{" "}
+                        <span className="text-blue-300">OUT</span>
+                      </div>
+                      <div className="text-sm text-blue-100 mt-0.5 truncate">
+                        → Suggested IN: #{assistedSuggestion.benchPlayer?.jersey}{" "}
+                        {assistedSuggestion.benchPlayer?.name}
+                      </div>
+                    </>
+                  )}
                   <div className="text-[10px] font-black text-blue-300 uppercase tracking-wider mt-1">
                     Why: {assistedSuggestion.reason}
                   </div>
                 </div>
                 <button
-                  onClick={() => handleSwap(assistedSuggestion.courtId)}
+                  onClick={() =>
+                    handleSwap(
+                      assistedSuggestion.type === "bench_first"
+                        ? assistedSuggestion.courtId
+                        : assistedSuggestion.benchId,
+                    )
+                  }
                   className="min-h-[52px] px-5 bg-white text-blue-600 rounded-xl font-black text-xs uppercase tracking-widest shadow-md hover:bg-blue-50 active:scale-95 transition-all shrink-0"
                 >
                   Confirm
@@ -546,7 +620,7 @@ export default function LiveView({
                 <div
                   key={id}
                   onClick={() => handleSwap(id)}
-                  className={`p-3 md:p-4 border-2 rounded-2xl transition-all shadow-sm flex flex-col gap-3 cursor-pointer ${
+                  className={`p-3 md:p-4 border-2 rounded-2xl transition-all shadow-sm flex flex-col gap-2.5 cursor-pointer ${
                     isSelected
                       ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100 scale-[1.01]"
                       : isSuggestedOut
@@ -554,115 +628,97 @@ export default function LiveView({
                         : "bg-white border-slate-100 hover:border-slate-200"
                   }`}
                 >
-                  {/* Info Row */}
-                  <div className="flex justify-between items-center">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-black text-slate-800 text-lg md:text-xl truncate block">
-                          #{p.jersey} {p.name}
+                  {/* — Row 1: Player Identity — */}
+                  <div className="flex items-center justify-between min-w-0">
+                    <span className="font-black text-slate-800 text-lg md:text-xl truncate">
+                      #{p.jersey} {p.name}
+                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                      {isSuggestedOut && (
+                        <span className="text-[8px] font-black bg-amber-400 text-slate-900 px-2 py-0.5 rounded uppercase tracking-widest">
+                          Sub Out
                         </span>
-                        {isSuggestedOut && (
-                          <span className="text-[8px] font-black bg-amber-400 text-slate-900 px-2 py-0.5 rounded uppercase tracking-widest shrink-0">
-                            Sub Out
-                          </span>
-                        )}
-                        <div className="flex items-center gap-1 bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100 shadow-sm">
-                          <Clock size={12} className="shrink-0" />
-                          <span className="text-[12px] font-bold tabular-nums leading-none">
-                            {formatTime(timePlayed)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
-                          {isSelected ? "Select sub" : "Tap for sub"}
-                        </span>
-                        <span
-                          className={`text-[10px] font-black uppercase px-1.5 py-0.5 rounded border ${pm > 0 ? "bg-emerald-50 text-emerald-600 border-emerald-100" : pm < 0 ? "bg-red-50 text-red-600 border-red-100" : "bg-slate-100 text-slate-500 border-slate-200"}`}
-                        >
-                          +/- ({pm > 0 ? `+${pm}` : pm})
-                        </span>
-                        {streak === "hot" && (
-                          <span
-                            className="text-base animate-bounce"
-                            title="Hot Hand (3+ Scores)"
-                          >
-                            🔥
-                          </span>
-                        )}
-                        {streak === "cold" && (
-                          <span
-                            className="text-base animate-pulse"
-                            title="Cold Streak (2+ TOs)"
-                          >
-                            ❄️
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Negatives Display/Buttons (Turnovers & Fouls) */}
-                    <div className="flex gap-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          addStat(id, "turnovers", 1);
-                        }}
-                        className="h-12 w-16 rounded-xl border-2 flex flex-col items-center justify-center transition-all bg-orange-50 border-orange-100 text-orange-600 hover:bg-orange-100"
-                      >
-                        <span className="text-[8px] font-black uppercase leading-none">
-                          TO
-                        </span>
-                        <span className="font-black text-xl leading-none">
-                          {stats.turnovers || 0}
-                        </span>
-                      </button>
-
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          addStat(id, "fouls", 1);
-                        }}
-                        className={`h-12 w-16 rounded-xl border-2 flex flex-col items-center justify-center transition-all ${
-                          stats.fouls >= 4
-                            ? "bg-red-600 border-red-600 text-white"
-                            : "bg-red-50 border-red-100 text-red-600 hover:bg-red-100"
-                        }`}
-                      >
-                        <span className="text-[8px] font-black uppercase leading-none">
-                          Fouls
-                        </span>
-                        <span className="font-black text-xl leading-none">
-                          {stats.fouls}
-                        </span>
-                      </button>
+                      )}
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">
+                        {isSelected ? "Select sub ▸" : "Tap to sub"}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Scoring Interaction Row */}
+                  {/* — Row 2: Decision Signals — */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-1 bg-blue-50 text-blue-600 px-2 py-1 rounded-lg border border-blue-100">
+                      <Clock size={11} className="shrink-0" />
+                      <span className="text-[11px] font-black tabular-nums">
+                        {formatTime(timePlayed)}
+                      </span>
+                    </div>
+                    <div
+                      className={`px-2 py-1 rounded-lg border text-[11px] font-black ${
+                        pm > 0
+                          ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                          : pm < 0
+                            ? "bg-red-50 text-red-600 border-red-100"
+                            : "bg-slate-100 text-slate-500 border-slate-200"
+                      }`}
+                    >
+                      +/- {pm > 0 ? `+${pm}` : pm}
+                    </div>
+                    {streak === "hot" && (
+                      <span className="text-base animate-bounce" title="Hot Hand (3+ Scores)">
+                        🔥
+                      </span>
+                    )}
+                    {streak === "cold" && (
+                      <span className="text-base animate-pulse" title="Cold Streak (2+ TOs)">
+                        ❄️
+                      </span>
+                    )}
+                  </div>
+
+                  {/* — Row 3: Score Buttons — */}
                   <div
                     onClick={(e) => e.stopPropagation()}
-                    className="flex items-center gap-2"
+                    className="grid grid-cols-3 bg-slate-100 p-1 rounded-xl gap-1"
                   >
-                    <div className="flex-1 grid grid-cols-3 bg-slate-100 p-1 rounded-xl gap-1">
-                      {[1, 2, 3].map((val) => (
-                        <button
-                          key={val}
-                          onClick={() => addStat(id, "score", val)}
-                          className="h-12 bg-white rounded-lg font-black text-slate-800 shadow-sm hover:bg-slate-900 hover:text-white transition-all active:scale-95"
-                        >
-                          +{val}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="w-16 h-14 bg-slate-900 text-white rounded-xl flex flex-col items-center justify-center shrink-0 shadow-lg">
-                      <span className="text-[8px] font-black uppercase text-slate-500">
-                        Pts
+                    {[1, 2, 3].map((val) => (
+                      <button
+                        key={val}
+                        onClick={() => addStat(id, "score", val)}
+                        className="h-12 bg-white rounded-lg font-black text-slate-800 shadow-sm hover:bg-slate-900 hover:text-white transition-all active:scale-95"
+                      >
+                        +{val}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* — Row 4: TO & Foul — */}
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="grid grid-cols-2 gap-2"
+                  >
+                    <button
+                      onClick={() => addStat(id, "turnovers", 1)}
+                      className="h-11 rounded-xl border-2 flex items-center justify-center gap-2 transition-all active:scale-95 bg-orange-50 border-orange-100 text-orange-600 hover:bg-orange-100"
+                    >
+                      <span className="text-[10px] font-black uppercase">TO</span>
+                      <span className="font-black text-xl leading-none">
+                        {stats.turnovers || 0}
                       </span>
-                      <span className="text-2xl font-black leading-none">
-                        {stats.score}
+                    </button>
+                    <button
+                      onClick={() => addStat(id, "fouls", 1)}
+                      className={`h-11 rounded-xl border-2 flex items-center justify-center gap-2 transition-all active:scale-95 ${
+                        stats.fouls >= 4
+                          ? "bg-red-600 border-red-600 text-white"
+                          : "bg-red-50 border-red-100 text-red-600 hover:bg-red-100"
+                      }`}
+                    >
+                      <span className="text-[10px] font-black uppercase">Foul</span>
+                      <span className="font-black text-xl leading-none">
+                        {stats.fouls}
                       </span>
-                    </div>
+                    </button>
                   </div>
                 </div>
               );
@@ -687,6 +743,9 @@ export default function LiveView({
                 )
                 .map((p) => {
                   const isSelected = pendingSwapIds.includes(p.id);
+                  const isSuggestedIn =
+                    assistedSuggestion?.type === "court_first" &&
+                    assistedSuggestion?.benchId === p.id;
                   const stats = playerStats[p.id] || {
                     score: 0,
                     fouls: 0,
@@ -705,15 +764,24 @@ export default function LiveView({
                       className={`p-3 rounded-xl border-2 text-left transition-all ${
                         isFouledOut
                           ? "bg-red-50 border-red-200 opacity-50 grayscale cursor-not-allowed"
-                          : isSelected
-                            ? "border-blue-500 bg-blue-50 shadow-md"
-                            : "bg-white border-slate-100 hover:border-blue-300"
+                          : isSuggestedIn
+                            ? "border-emerald-400 bg-emerald-50 ring-2 ring-emerald-200 shadow-md"
+                            : isSelected
+                              ? "border-blue-500 bg-blue-50 shadow-md"
+                              : "bg-white border-slate-100 hover:border-blue-300"
                       } ${isRunning && !isFouledOut ? "opacity-40 grayscale" : ""} ${!isRunning && !isFouledOut ? "active:scale-95" : ""}`}
                     >
                       <div className="flex justify-between items-start">
                         <div className="flex flex-col items-start">
-                          <div className="font-black text-slate-800 text-sm truncate">
-                            #{p.jersey} {p.name}
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-black text-slate-800 text-sm truncate">
+                              #{p.jersey} {p.name}
+                            </span>
+                            {isSuggestedIn && (
+                              <span className="text-[8px] font-black bg-emerald-400 text-slate-900 px-1.5 py-0.5 rounded uppercase tracking-widest shrink-0">
+                                Sub In
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center gap-2 mt-1">
                             <span
