@@ -66,7 +66,10 @@ export default function LiveView({
 
   // Adds up all the points scored by every player on our team, plus any manual adjustments.
   const teamTotalScore =
-    Object.values(playerStats).reduce((acc, curr) => acc + (curr.score || 0), 0) +
+    Object.values(playerStats).reduce(
+      (acc, curr) => acc + (curr.score || 0),
+      0,
+    ) +
     actionHistory
       .filter((a) => a.type === "score_adjust")
       .reduce((acc, a) => acc + (a.amount || 0), 0);
@@ -354,142 +357,145 @@ export default function LiveView({
             .sort((a, b) => {
               const pa = roster.find((r) => r.id === a);
               const pb = roster.find((r) => r.id === b);
-              return parseInt(pa?.jersey || "0", 10) - parseInt(pb?.jersey || "0", 10);
+              return (
+                parseInt(pa?.jersey || "0", 10) -
+                parseInt(pb?.jersey || "0", 10)
+              );
             })
             .map((id) => {
-            const p = roster.find((r) => r.id === id);
-            // Safety check: if player not found in roster, skip rendering to prevent crash
-            if (!p) return null;
+              const p = roster.find((r) => r.id === id);
+              // Safety check: if player not found in roster, skip rendering to prevent crash
+              if (!p) return null;
 
-            // Default turnovers to 0 if they don't have any yet
-            const stats = playerStats[id] || {
-              score: 0,
-              fouls: 0,
-              turnovers: 0,
-            };
-            const isSelected = pendingSwapIds.includes(id);
-            const timePlayed = playerTimes?.[id] || 0;
-            const pm = playerPlusMinus[id] || 0;
-            const streak = playerStreaks[id];
+              // Default turnovers to 0 if they don't have any yet
+              const stats = playerStats[id] || {
+                score: 0,
+                fouls: 0,
+                turnovers: 0,
+              };
+              const isSelected = pendingSwapIds.includes(id);
+              const timePlayed = playerTimes?.[id] || 0;
+              const pm = playerPlusMinus[id] || 0;
+              const streak = playerStreaks[id];
 
-            return (
-              <div
-                key={id}
-                onClick={() => handleSwap(id)}
-                className={`p-3 md:p-4 border-2 rounded-2xl transition-all shadow-sm flex flex-col gap-3 cursor-pointer ${
-                  isSelected
-                    ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100 scale-[1.01]"
-                    : "bg-white border-slate-100 hover:border-slate-200"
-                }`}
-              >
-                {/* Info Row */}
-                <div className="flex justify-between items-center">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-black text-slate-800 text-lg md:text-xl truncate block">
-                        #{p.jersey} {p.name}
-                      </span>
-                      <div className="flex items-center gap-1 bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100 shadow-sm">
-                        <Clock size={12} className="shrink-0" />
-                        <span className="text-[12px] font-bold tabular-nums leading-none">
-                          {formatTime(timePlayed)}
+              return (
+                <div
+                  key={id}
+                  onClick={() => handleSwap(id)}
+                  className={`p-3 md:p-4 border-2 rounded-2xl transition-all shadow-sm flex flex-col gap-3 cursor-pointer ${
+                    isSelected
+                      ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100 scale-[1.01]"
+                      : "bg-white border-slate-100 hover:border-slate-200"
+                  }`}
+                >
+                  {/* Info Row */}
+                  <div className="flex justify-between items-center">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-slate-800 text-lg md:text-xl truncate block">
+                          #{p.jersey} {p.name}
                         </span>
+                        <div className="flex items-center gap-1 bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100 shadow-sm">
+                          <Clock size={12} className="shrink-0" />
+                          <span className="text-[12px] font-bold tabular-nums leading-none">
+                            {formatTime(timePlayed)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                          {isSelected ? "Select sub" : "Tap for sub"}
+                        </span>
+                        <span
+                          className={`text-[10px] font-black uppercase px-1.5 py-0.5 rounded border ${pm > 0 ? "bg-emerald-50 text-emerald-600 border-emerald-100" : pm < 0 ? "bg-red-50 text-red-600 border-red-100" : "bg-slate-100 text-slate-500 border-slate-200"}`}
+                        >
+                          +/- ({pm > 0 ? `+${pm}` : pm})
+                        </span>
+                        {streak === "hot" && (
+                          <span
+                            className="text-base animate-bounce"
+                            title="Hot Hand (3+ Scores)"
+                          >
+                            🔥
+                          </span>
+                        )}
+                        {streak === "cold" && (
+                          <span
+                            className="text-base animate-pulse"
+                            title="Cold Streak (2+ TOs)"
+                          >
+                            ❄️
+                          </span>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
-                        {isSelected ? "Select sub" : "Tap for sub"}
-                      </span>
-                      <span
-                        className={`text-[10px] font-black uppercase px-1.5 py-0.5 rounded border ${pm > 0 ? "bg-emerald-50 text-emerald-600 border-emerald-100" : pm < 0 ? "bg-red-50 text-red-600 border-red-100" : "bg-slate-100 text-slate-500 border-slate-200"}`}
+
+                    {/* Negatives Display/Buttons (Turnovers & Fouls) */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          addStat(id, "turnovers", 1);
+                        }}
+                        className="h-12 w-16 rounded-xl border-2 flex flex-col items-center justify-center transition-all bg-orange-50 border-orange-100 text-orange-600 hover:bg-orange-100"
                       >
-                        +/- ({pm > 0 ? `+${pm}` : pm})
-                      </span>
-                      {streak === "hot" && (
-                        <span
-                          className="text-base animate-bounce"
-                          title="Hot Hand (3+ Scores)"
-                        >
-                          🔥
+                        <span className="text-[8px] font-black uppercase leading-none">
+                          TO
                         </span>
-                      )}
-                      {streak === "cold" && (
-                        <span
-                          className="text-base animate-pulse"
-                          title="Cold Streak (2+ TOs)"
-                        >
-                          ❄️
+                        <span className="font-black text-xl leading-none">
+                          {stats.turnovers || 0}
                         </span>
-                      )}
+                      </button>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          addStat(id, "fouls", 1);
+                        }}
+                        className={`h-12 w-16 rounded-xl border-2 flex flex-col items-center justify-center transition-all ${
+                          stats.fouls >= 4
+                            ? "bg-red-600 border-red-600 text-white"
+                            : "bg-red-50 border-red-100 text-red-600 hover:bg-red-100"
+                        }`}
+                      >
+                        <span className="text-[8px] font-black uppercase leading-none">
+                          Fouls
+                        </span>
+                        <span className="font-black text-xl leading-none">
+                          {stats.fouls}
+                        </span>
+                      </button>
                     </div>
                   </div>
 
-                  {/* Negatives Display/Buttons (Turnovers & Fouls) */}
-                  <div className="flex gap-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        addStat(id, "turnovers", 1);
-                      }}
-                      className="h-12 w-16 rounded-xl border-2 flex flex-col items-center justify-center transition-all bg-orange-50 border-orange-100 text-orange-600 hover:bg-orange-100"
-                    >
-                      <span className="text-[8px] font-black uppercase leading-none">
-                        TO
+                  {/* Scoring Interaction Row */}
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-2"
+                  >
+                    <div className="flex-1 grid grid-cols-3 bg-slate-100 p-1 rounded-xl gap-1">
+                      {[1, 2, 3].map((val) => (
+                        <button
+                          key={val}
+                          onClick={() => addStat(id, "score", val)}
+                          className="h-12 bg-white rounded-lg font-black text-slate-800 shadow-sm hover:bg-slate-900 hover:text-white transition-all active:scale-95"
+                        >
+                          +{val}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="w-16 h-14 bg-slate-900 text-white rounded-xl flex flex-col items-center justify-center shrink-0 shadow-lg">
+                      <span className="text-[8px] font-black uppercase text-slate-500">
+                        Pts
                       </span>
-                      <span className="font-black text-xl leading-none">
-                        {stats.turnovers || 0}
+                      <span className="text-2xl font-black leading-none">
+                        {stats.score}
                       </span>
-                    </button>
-
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        addStat(id, "fouls", 1);
-                      }}
-                      className={`h-12 w-16 rounded-xl border-2 flex flex-col items-center justify-center transition-all ${
-                        stats.fouls >= 4
-                          ? "bg-red-600 border-red-600 text-white"
-                          : "bg-red-50 border-red-100 text-red-600 hover:bg-red-100"
-                      }`}
-                    >
-                      <span className="text-[8px] font-black uppercase leading-none">
-                        Fouls
-                      </span>
-                      <span className="font-black text-xl leading-none">
-                        {stats.fouls}
-                      </span>
-                    </button>
+                    </div>
                   </div>
                 </div>
-
-                {/* Scoring Interaction Row */}
-                <div
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex items-center gap-2"
-                >
-                  <div className="flex-1 grid grid-cols-3 bg-slate-100 p-1 rounded-xl gap-1">
-                    {[1, 2, 3].map((val) => (
-                      <button
-                        key={val}
-                        onClick={() => addStat(id, "score", val)}
-                        className="h-12 bg-white rounded-lg font-black text-slate-800 shadow-sm hover:bg-slate-900 hover:text-white transition-all active:scale-95"
-                      >
-                        +{val}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="w-16 h-14 bg-slate-900 text-white rounded-xl flex flex-col items-center justify-center shrink-0 shadow-lg">
-                    <span className="text-[8px] font-black uppercase text-slate-500">
-                      Pts
-                    </span>
-                    <span className="text-2xl font-black leading-none">
-                      {stats.score}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
         </div>
 
         {/* 🪑 3. BENCH SECTION (SIDEBAR): Shows players waiting to sub in, and tracks team fouls/timeouts. */}
@@ -503,7 +509,11 @@ export default function LiveView({
               {/* Look through the whole roster, but only show players who are NOT on the court. */}
               {roster
                 .filter((p) => !court.includes(p.id))
-                .sort((a, b) => parseInt(a.jersey || "0", 10) - parseInt(b.jersey || "0", 10))
+                .sort(
+                  (a, b) =>
+                    parseInt(a.jersey || "0", 10) -
+                    parseInt(b.jersey || "0", 10),
+                )
                 .map((p) => {
                   const isSelected = pendingSwapIds.includes(p.id);
                   const stats = playerStats[p.id] || {
@@ -579,7 +589,7 @@ export default function LiveView({
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-[10px] font-bold text-slate-500">
-                            Pts: {stats.score}
+                            PTS: {stats.score}
                           </span>
                           <span className="text-[10px] font-bold text-orange-500">
                             TO: {stats.turnovers || 0}
@@ -587,7 +597,7 @@ export default function LiveView({
                           <span
                             className={`text-[10px] font-bold ${stats.fouls >= 4 ? "text-red-600" : "text-slate-500"}`}
                           >
-                            Fls: {stats.fouls}
+                            FLS: {stats.fouls}
                           </span>
                         </div>
                       </div>

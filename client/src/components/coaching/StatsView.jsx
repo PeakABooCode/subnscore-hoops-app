@@ -71,7 +71,10 @@ export default function StatsView({
 
   // --- Calculations ---
   const teamTotalScore =
-    Object.values(playerStats).reduce((acc, curr) => acc + (curr.score || 0), 0) +
+    Object.values(playerStats).reduce(
+      (acc, curr) => acc + (curr.score || 0),
+      0,
+    ) +
     actionHistory
       .filter((a) => a.type === "score_adjust")
       .reduce((acc, a) => acc + (a.amount || 0), 0);
