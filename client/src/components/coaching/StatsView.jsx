@@ -70,10 +70,11 @@ export default function StatsView({
   const [lineupSortBy, setLineupSortBy] = useState("eff"); // eff, pts, time, to, fls, pm
 
   // --- Calculations ---
-  const teamTotalScore = Object.values(playerStats).reduce(
-    (acc, curr) => acc + (curr.score || 0),
-    0,
-  );
+  const teamTotalScore =
+    Object.values(playerStats).reduce((acc, curr) => acc + (curr.score || 0), 0) +
+    actionHistory
+      .filter((a) => a.type === "score_adjust")
+      .reduce((acc, a) => acc + (a.amount || 0), 0);
   const teamTotalFouls = Object.values(playerStats).reduce(
     (acc, curr) => acc + (curr.fouls || 0),
     0,
@@ -771,9 +772,11 @@ export default function StatsView({
                               ? `${teamMeta.opponent || "Opponent"} Score`
                               : action.type === "TIMEOUT"
                                 ? "Team Timeout"
-                                : p
-                                  ? `${p.name} (#${p.jersey})`
-                                  : "Unknown Player"}
+                                : action.type === "score_adjust"
+                                  ? "Score Adjustment"
+                                  : p
+                                    ? `${p.name} (#${p.jersey})`
+                                    : "Unknown Player"}
                           </span>
                         </div>
                       </div>
@@ -788,7 +791,11 @@ export default function StatsView({
                                   ? "bg-red-100 text-red-700"
                                   : action.type === "turnovers"
                                     ? "bg-orange-100 text-orange-700"
-                                    : "bg-slate-100 text-slate-700"
+                                    : action.type === "score_adjust"
+                                      ? action.amount >= 0
+                                        ? "bg-blue-100 text-blue-700"
+                                        : "bg-red-100 text-red-700"
+                                      : "bg-slate-100 text-slate-700"
                           }`}
                         >
                           {action.type === "score"
@@ -799,13 +806,15 @@ export default function StatsView({
                                 ? "Foul"
                                 : action.type === "turnovers"
                                   ? "Turnover"
-                                  : action.type === "SUB_IN"
-                                    ? "Sub In"
-                                    : action.type === "SUB_OUT"
-                                      ? "Sub Out"
-                                      : action.type === "TIMEOUT"
-                                        ? "Timeout"
-                                        : action.type}
+                                  : action.type === "score_adjust"
+                                    ? `${action.amount >= 0 ? "+" : ""}${action.amount} Pts Adjust`
+                                    : action.type === "SUB_IN"
+                                      ? "Sub In"
+                                      : action.type === "SUB_OUT"
+                                        ? "Sub Out"
+                                        : action.type === "TIMEOUT"
+                                          ? "Timeout"
+                                          : action.type}
                         </span>
 
                         {/* Selective Deletion: Hide for substitutions and historical archives */}
@@ -814,7 +823,8 @@ export default function StatsView({
                             action.type === "opp_score" ||
                             action.type === "fouls" ||
                             action.type === "turnovers" ||
-                            action.type === "TIMEOUT") && (
+                            action.type === "TIMEOUT" ||
+                            action.type === "score_adjust") && (
                             <button
                               onClick={() => {
                                 // Because the list is reversed for display, we calculate the original index

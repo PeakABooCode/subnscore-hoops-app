@@ -1424,6 +1424,18 @@ export default function App() {
     ]);
   };
 
+  const addScoreAdjust = (amount) => {
+    setActionHistory((prev) => [
+      ...prev,
+      {
+        type: "score_adjust",
+        amount,
+        quarter: coachingQuarter,
+        clock: coachingClock,
+      },
+    ]);
+  };
+
   const undoLastAction = () => {
     if (actionHistory.length === 0) return;
     const historyCopy = [...actionHistory];
@@ -2103,6 +2115,7 @@ export default function App() {
             pendingSwapIds={pendingSwapIds}
             playerTimes={playerTimes}
             addOpponentScore={addOpponentScore}
+            addScoreAdjust={addScoreAdjust}
             actionHistory={actionHistory}
             showNotification={showNotification}
           />

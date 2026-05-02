@@ -38,6 +38,7 @@ export default function LiveView({
   pendingSwapIds,
   playerTimes,
   addOpponentScore,
+  addScoreAdjust,
   actionHistory = [],
   stints = [],
 }) {
@@ -63,11 +64,12 @@ export default function LiveView({
     if (newSeconds >= 0) setClock(newSeconds);
   };
 
-  // Adds up all the points scored by every player on our team.
-  const teamTotalScore = Object.values(playerStats).reduce(
-    (acc, curr) => acc + (curr.score || 0),
-    0,
-  );
+  // Adds up all the points scored by every player on our team, plus any manual adjustments.
+  const teamTotalScore =
+    Object.values(playerStats).reduce((acc, curr) => acc + (curr.score || 0), 0) +
+    actionHistory
+      .filter((a) => a.type === "score_adjust")
+      .reduce((acc, a) => acc + (a.amount || 0), 0);
 
   // Looks through the game history to find and add up all the points the opponent scored.
   const opponentScore = actionHistory
@@ -198,9 +200,25 @@ export default function LiveView({
               <span className="text-[9px] md:text-[11px] font-black text-amber-500 uppercase tracking-widest truncate w-full text-center md:text-left">
                 {teamMeta.teamName || "HOME"}
               </span>
-              <span className="text-3xl md:text-5xl font-black">
-                {teamTotalScore}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => addScoreAdjust(-1)}
+                  className="w-7 h-7 rounded-lg bg-slate-700 hover:bg-red-600 text-white font-black text-base leading-none transition-all active:scale-90 shrink-0"
+                  title="Subtract 1 point (score adjust)"
+                >
+                  −
+                </button>
+                <span className="text-3xl md:text-5xl font-black tabular-nums">
+                  {teamTotalScore}
+                </span>
+                <button
+                  onClick={() => addScoreAdjust(1)}
+                  className="w-7 h-7 rounded-lg bg-slate-700 hover:bg-emerald-600 text-white font-black text-base leading-none transition-all active:scale-90 shrink-0"
+                  title="Add 1 point (score adjust)"
+                >
+                  +
+                </button>
+              </div>
               {currentRun?.type === "us" && (
                 <span className="text-[9px] md:text-xs font-black text-emerald-400 animate-pulse bg-emerald-400/10 px-2 py-0.5 rounded-full mt-1 flex items-center gap-1 shadow-sm border border-emerald-400/20">
                   <TrendingUp size={10} /> {currentRun.points}-0 RUN
