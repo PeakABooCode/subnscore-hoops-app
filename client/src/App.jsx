@@ -787,6 +787,7 @@ export default function App() {
         roster: rosterToSave,
         league: teamMeta.league,
         season: teamMeta.season,
+        division: teamMeta.division,
       });
 
       if (!res.data?.roster || !Array.isArray(res.data.roster)) {
@@ -862,7 +863,8 @@ export default function App() {
         setView("AUTH");
         showNotification("Session expired. Please log in.");
       } else {
-        showNotification("Failed to save roster to cloud.");
+        const detail = err.response?.data?.detail || err.response?.data?.error;
+        showNotification(detail || "Failed to save roster to cloud.");
       }
     } finally {
       setIsAppLoading(false);
