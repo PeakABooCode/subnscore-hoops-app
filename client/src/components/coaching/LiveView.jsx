@@ -544,61 +544,6 @@ export default function LiveView({
             </div>
           )}
 
-          {/* 🤝 ASSISTED SUB BANNER */}
-          {assistedSuggestion && (
-            <div className="bg-blue-600 text-white rounded-2xl p-4 shadow-lg border border-blue-500">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <span className="text-[9px] font-black text-blue-200 uppercase tracking-[0.2em]">
-                    Assisted Sub
-                  </span>
-                  {assistedSuggestion.type === "bench_first" ? (
-                    <>
-                      <div className="font-black text-base leading-tight mt-0.5 truncate">
-                        #{assistedSuggestion.benchPlayer?.jersey}{" "}
-                        {assistedSuggestion.benchPlayer?.name}{" "}
-                        <span className="text-blue-300">IN</span>
-                      </div>
-                      <div className="text-sm text-blue-100 mt-0.5 truncate">
-                        → Suggested OUT: #
-                        {assistedSuggestion.courtPlayer?.jersey}{" "}
-                        {assistedSuggestion.courtPlayer?.name}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="font-black text-base leading-tight mt-0.5 truncate">
-                        #{assistedSuggestion.courtPlayer?.jersey}{" "}
-                        {assistedSuggestion.courtPlayer?.name}{" "}
-                        <span className="text-blue-300">OUT</span>
-                      </div>
-                      <div className="text-sm text-blue-100 mt-0.5 truncate">
-                        → Suggested IN: #
-                        {assistedSuggestion.benchPlayer?.jersey}{" "}
-                        {assistedSuggestion.benchPlayer?.name}
-                      </div>
-                    </>
-                  )}
-                  <div className="text-[10px] font-black text-blue-300 uppercase tracking-wider mt-1">
-                    Why: {assistedSuggestion.reason}
-                  </div>
-                </div>
-                <button
-                  onClick={() =>
-                    handleSwap(
-                      assistedSuggestion.type === "bench_first"
-                        ? assistedSuggestion.courtId
-                        : assistedSuggestion.benchId,
-                    )
-                  }
-                  className="min-h-[52px] px-5 bg-white text-blue-600 rounded-xl font-black text-xs uppercase tracking-widest shadow-md hover:bg-blue-50 active:scale-95 transition-all shrink-0"
-                >
-                  Confirm
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* If no one is on the court yet (like at the start of the game), show this message. */}
           {court.length === 0 && (
             <div className="py-12 text-center border-2 border-dashed border-blue-300 bg-blue-50/50 rounded-2xl shadow-inner">
@@ -640,8 +585,61 @@ export default function LiveView({
               const streak = playerStreaks[id];
 
               return (
+                <React.Fragment key={id}>
+                  {/* 🤝 ASSISTED SUB BANNER — only shown here for court-first taps */}
+                  {isSuggestedOut && assistedSuggestion?.type === "court_first" && (
+                    <div className="bg-blue-600 text-white rounded-2xl p-4 shadow-lg border border-blue-500">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <span className="text-[9px] font-black text-blue-200 uppercase tracking-[0.2em]">
+                            Assisted Sub
+                          </span>
+                          {assistedSuggestion.type === "bench_first" ? (
+                            <>
+                              <div className="font-black text-base leading-tight mt-0.5 truncate">
+                                #{assistedSuggestion.benchPlayer?.jersey}{" "}
+                                {assistedSuggestion.benchPlayer?.name}{" "}
+                                <span className="text-blue-300">IN</span>
+                              </div>
+                              <div className="text-sm text-blue-100 mt-0.5 truncate">
+                                → Suggested OUT: #{assistedSuggestion.courtPlayer?.jersey}{" "}
+                                {assistedSuggestion.courtPlayer?.name}
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="font-black text-base leading-tight mt-0.5 truncate">
+                                #{assistedSuggestion.courtPlayer?.jersey}{" "}
+                                {assistedSuggestion.courtPlayer?.name}{" "}
+                                <span className="text-blue-300">OUT</span>
+                              </div>
+                              <div className="text-sm text-blue-100 mt-0.5 truncate">
+                                → Suggested IN: #{assistedSuggestion.benchPlayer?.jersey}{" "}
+                                {assistedSuggestion.benchPlayer?.name}
+                              </div>
+                            </>
+                          )}
+                          <div className="text-[10px] font-black text-blue-300 uppercase tracking-wider mt-1">
+                            Why: {assistedSuggestion.reason}
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSwap(
+                              assistedSuggestion.type === "bench_first"
+                                ? assistedSuggestion.courtId
+                                : assistedSuggestion.benchId,
+                            );
+                          }}
+                          className="min-h-[52px] px-5 bg-white text-blue-600 rounded-xl font-black text-xs uppercase tracking-widest shadow-md hover:bg-blue-50 active:scale-95 transition-all shrink-0"
+                        >
+                          Confirm
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 <div
-                  key={id}
                   onClick={() => handleSwap(id)}
                   className={`p-3 md:p-4 border-2 rounded-2xl transition-all shadow-sm flex flex-col gap-2.5 cursor-pointer ${
                     isSelected
@@ -759,6 +757,7 @@ export default function LiveView({
                     </button>
                   </div>
                 </div>
+                </React.Fragment>
               );
             })}
         </div>
@@ -794,9 +793,45 @@ export default function LiveView({
                   const pm = playerPlusMinus[p.id] || 0;
                   const streak = playerStreaks[p.id];
                   const isFouledOut = stats.fouls >= 5;
+                  const isBenchTapped =
+                    assistedSuggestion?.type === "bench_first" &&
+                    assistedSuggestion?.benchId === p.id;
                   return (
+                    <React.Fragment key={p.id}>
+                      {/* 🤝 ASSISTED SUB BANNER — inline above the tapped bench player */}
+                      {isBenchTapped && (
+                        <div className="bg-blue-600 text-white rounded-2xl p-4 shadow-lg border border-blue-500">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <span className="text-[9px] font-black text-blue-200 uppercase tracking-[0.2em]">
+                                Assisted Sub
+                              </span>
+                              <div className="font-black text-base leading-tight mt-0.5 truncate">
+                                #{assistedSuggestion.benchPlayer?.jersey}{" "}
+                                {assistedSuggestion.benchPlayer?.name}{" "}
+                                <span className="text-blue-300">IN</span>
+                              </div>
+                              <div className="text-sm text-blue-100 mt-0.5 truncate">
+                                → Suggested OUT: #{assistedSuggestion.courtPlayer?.jersey}{" "}
+                                {assistedSuggestion.courtPlayer?.name}
+                              </div>
+                              <div className="text-[10px] font-black text-blue-300 uppercase tracking-wider mt-1">
+                                Why: {assistedSuggestion.reason}
+                              </div>
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSwap(assistedSuggestion.courtId);
+                              }}
+                              className="min-h-[52px] px-5 bg-white text-blue-600 rounded-xl font-black text-xs uppercase tracking-widest shadow-md hover:bg-blue-50 active:scale-95 transition-all shrink-0"
+                            >
+                              Confirm
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     <button
-                      key={p.id}
                       onClick={() => handleSwap(p.id)}
                       disabled={isRunning || isFouledOut}
                       className={`p-3 rounded-xl border-2 text-left transition-all ${
@@ -879,6 +914,7 @@ export default function LiveView({
                         </div>
                       </div>
                     </button>
+                    </React.Fragment>
                   );
                 })}
             </div>
