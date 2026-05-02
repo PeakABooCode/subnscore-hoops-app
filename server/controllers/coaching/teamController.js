@@ -29,21 +29,30 @@ export const saveRoster = async (req, res) => {
       teamId = newTeam.rows[0].id;
     }
 
-    const updatedRoster = [];
-    const activeDbIds = [];
+    // 2. Delete removed players FIRST so their jersey numbers are freed before
+    //    any updates that might claim those numbers.
+    const retainedDbIds = roster.filter((p) => p.dbId).map((p) => p.dbId);
+    if (retainedDbIds.length > 0) {
+      await pool.query(
+        "DELETE FROM players WHERE team_id = $1 AND id != ALL($2)",
+        [teamId, retainedDbIds],
+      );
+    } else {
+      await pool.query("DELETE FROM players WHERE team_id = $1", [teamId]);
+    }
 
-    // 2. Sync Roster with Stable Identity (ID-based Upsert)
+    // 3. Upsert each player
+    const updatedRoster = [];
     for (const player of roster) {
       let dbPlayerId = player.dbId;
 
       if (dbPlayerId) {
-        // Update existing player record
         await pool.query(
           "UPDATE players SET name = $1, jersey_number = $2 WHERE id = $3 AND team_id = $4",
           [player.name, player.jersey, dbPlayerId, teamId],
         );
       } else {
-        // Fallback: check by name/jersey if dbId is missing but record exists
+        // Fallback: match by name+jersey in case the record already exists
         const check = await pool.query(
           "SELECT id FROM players WHERE team_id = $1 AND name = $2 AND jersey_number = $3",
           [teamId, player.name, player.jersey],
@@ -51,7 +60,6 @@ export const saveRoster = async (req, res) => {
         if (check.rows.length > 0) {
           dbPlayerId = check.rows[0].id;
         } else {
-          // Truly a new player
           const insert = await pool.query(
             "INSERT INTO players (team_id, name, jersey_number) VALUES ($1, $2, $3) RETURNING id",
             [teamId, player.name, player.jersey],
@@ -60,19 +68,7 @@ export const saveRoster = async (req, res) => {
         }
       }
 
-      // Only add to result if not already processed (prevents duplicate IDs in response)
-      if (!activeDbIds.includes(dbPlayerId)) {
-        activeDbIds.push(dbPlayerId);
-        updatedRoster.push({ ...player, dbId: dbPlayerId, id: dbPlayerId });
-      }
-    }
-
-    // 3. Delete players removed from the roster UI
-    if (activeDbIds.length > 0) {
-      await pool.query(
-        "DELETE FROM players WHERE team_id = $1 AND id != ALL($2)",
-        [teamId, activeDbIds],
-      );
+      updatedRoster.push({ ...player, dbId: dbPlayerId, id: dbPlayerId });
     }
 
     await pool.query("COMMIT");
