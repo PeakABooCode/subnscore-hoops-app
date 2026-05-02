@@ -647,6 +647,11 @@ export default function LiveView({
 
                   {/* — Row 2: Decision Signals — */}
                   <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-1 bg-slate-900 text-amber-400 px-2 py-1 rounded-lg border border-slate-700">
+                      <span className="text-[11px] font-black tabular-nums">
+                        {stats.score} pts
+                      </span>
+                    </div>
                     <div className="flex items-center gap-1 bg-blue-50 text-blue-600 px-2 py-1 rounded-lg border border-blue-100">
                       <Clock size={11} className="shrink-0" />
                       <span className="text-[11px] font-black tabular-nums">

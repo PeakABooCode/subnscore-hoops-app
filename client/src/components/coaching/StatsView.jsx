@@ -42,7 +42,7 @@ export default function StatsView({
   historyQuarterStats, // New prop for pre-calculated quarter data
   gameMode = "FULL", // FULL, HALF, or OPEN
 }) {
-  const [activeTab, setActiveTab] = useState("boxscore");
+  const [activeTab, setActiveTab] = useState("insights");
   const [touchStart, setTouchStart] = useState(null);
   const [isSaveConfirmOpen, setIsSaveConfirmOpen] = useState(false);
 
