@@ -205,10 +205,14 @@ export default function CommitteeLiveView({
     }
   }, [clock, isRunning]);
 
-  // Trigger buzzer when shot clock hits zero
+  // Shot clock hits zero — sound only. Game clock keeps running; official stops it manually.
+  // playBuzzer() also calls setIsRunning(false) which is wrong for a shot clock violation.
   useEffect(() => {
     if (shotClock === 0 && isRunning) {
-      playBuzzer();
+      if (buzzerRef.current) {
+        buzzerRef.current.currentTime = 0;
+        buzzerRef.current.play().catch((e) => console.error("Buzzer error:", e));
+      }
     }
   }, [shotClock, isRunning]);
 
