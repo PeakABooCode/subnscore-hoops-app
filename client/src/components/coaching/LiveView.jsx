@@ -12,6 +12,7 @@ import {
   TrendingUp,
   ShieldAlert,
   Edit3,
+  Timer,
 } from "lucide-react";
 import { formatTime, QUARTER_SECONDS } from "../../utils/helpers";
 import InputModal from "../common/InputModal";
@@ -46,6 +47,8 @@ export default function LiveView({
 
   // 🕒 CLOCK EDITING STATE
   const [isEditClockOpen, setIsEditClockOpen] = useState(false);
+  // Tracks which quarter the Q-start lineup suggestion was dismissed for
+  const [suggestedForQuarter, setSuggestedForQuarter] = useState(null);
 
   const handleSaveClock = (val) => {
     let newSeconds = clock;
@@ -349,6 +352,77 @@ export default function LiveView({
     );
   }, [stints, quarter]);
 
+  // Seconds each court player has been in their current (open) stint this quarter
+  const courtStintSeconds = useMemo(() => {
+    const currentQ = Number(quarter);
+    const result = {};
+    court.forEach((id) => {
+      const active = [...stints]
+        .reverse()
+        .find(
+          (s) =>
+            s.playerId === id &&
+            s.clockOut === null &&
+            Number(s.quarter) === currentQ,
+        );
+      result[id] = active ? Math.max(0, active.clockIn - clock) : 0;
+    });
+    return result;
+  }, [court, stints, quarter, clock]);
+
+  // Seconds since team last scored this quarter only — resets each new quarter
+  const scoringDrought = useMemo(() => {
+    const currentQ = Number(quarter);
+    const lastScoreThisQ = [...actionHistory]
+      .reverse()
+      .find((a) => a.type === "score" && Number(a.quarter) === currentQ);
+    const secs = lastScoreThisQ
+      ? lastScoreThisQ.clock - clock          // time since last score this quarter
+      : QUARTER_SECONDS - clock;              // no score yet this quarter — time since tip-off
+    return secs >= 240 ? secs : null;
+  }, [actionHistory, quarter, clock]);
+
+  // Top 5 players from last quarter sorted by +/- — drives the Q-start suggestion panel
+  const lineupSuggestion = useMemo(() => {
+    if (quarter <= 1) return null;
+    const prevQ = quarter - 1;
+    const prevQStints = stints.filter((s) => s.quarter === prevQ);
+    const ids = [...new Set(prevQStints.map((s) => s.playerId))];
+    if (ids.length === 0) return null;
+    const pm = Object.fromEntries(ids.map((id) => [id, 0]));
+    actionHistory
+      .filter(
+        (a) =>
+          a.quarter === prevQ && (a.type === "score" || a.type === "opp_score"),
+      )
+      .forEach((a) => {
+        prevQStints
+          .filter(
+            (s) =>
+              s.clockIn >= a.clock &&
+              (s.clockOut === null || s.clockOut <= a.clock),
+          )
+          .forEach((s) => {
+            if (pm[s.playerId] !== undefined)
+              pm[s.playerId] += a.type === "score" ? a.amount : -a.amount;
+          });
+      });
+    return ids
+      .map((id) => ({
+        id,
+        pm: pm[id] || 0,
+        player: roster.find((p) => p.id === id),
+      }))
+      .filter((x) => x.player)
+      .sort((a, b) => b.pm - a.pm)
+      .slice(0, 5);
+  }, [quarter, stints, actionHistory, roster]);
+
+  const showQStartSuggestion =
+    quarter > 1 &&
+    suggestedForQuarter !== quarter &&
+    (lineupSuggestion?.length ?? 0) > 0;
+
   // 🎨 THE USER INTERFACE (UI): Everything below this line is what the coach sees on the screen.
   return (
     <div className="max-w-6xl mx-auto space-y-4 pb-24 px-2 lg:px-6">
@@ -438,7 +512,7 @@ export default function LiveView({
                 }
                 onClick={() => setIsRunning(!isRunning)}
                 disabled={court.length !== 5}
-                className={`h-10 px-4 md:px-6 rounded-xl transition-all shadow-lg flex items-center gap-2 ${
+                className={`h-15 px-4 md:px-6 rounded-xl transition-all shadow-lg flex items-center gap-2 ${
                   court.length !== 5
                     ? "bg-slate-600 text-slate-400 cursor-not-allowed opacity-50"
                     : isRunning
@@ -458,7 +532,7 @@ export default function LiveView({
               <button
                 title="Next Quarter"
                 onClick={() => advanceQuarter()}
-                className="h-10 w-10 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 active:scale-95"
+                className="h-15 w-12 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 active:scale-95"
               >
                 <RotateCcw size={16} />
               </button>
@@ -482,6 +556,75 @@ export default function LiveView({
           </div>
         </div>
       </div>
+
+      {/* 🔥 SCORING DROUGHT ALERT */}
+      {scoringDrought !== null && (
+        <div className="bg-amber-500/10 border border-amber-500/40 rounded-2xl px-4 py-3 flex items-center gap-3">
+          <AlertCircle
+            size={18}
+            className="text-amber-400 shrink-0 animate-pulse"
+          />
+          <div className="flex-1 min-w-0">
+            <div className="text-[10px] font-black text-amber-400 uppercase tracking-widest">
+              Scoring Drought — {formatTime(scoringDrought)}
+            </div>
+            <div className="text-[10px] font-bold text-slate-400 mt-0.5">
+              Team hasn&apos;t scored in {formatTime(scoringDrought)} — consider
+              calling timeout or changing plays
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📋 Q-START LINEUP SUGGESTION */}
+      {showQStartSuggestion && (
+        <div className="bg-blue-900/30 border border-blue-500/30 rounded-2xl p-4">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <div className="text-[9px] font-black text-blue-400 uppercase tracking-[0.2em]">
+                Suggested {shortPeriodName} Starters · Based on{" "}
+                {quarter > 4 ? `OT${quarter - 5}` : `Q${quarter - 1}`}{" "}
+                performance
+              </div>
+              <div className="text-[10px] text-slate-400 font-bold mt-0.5">
+                Sorted by +/- from last quarter
+              </div>
+            </div>
+            <button
+              onClick={() => setSuggestedForQuarter(quarter)}
+              className="text-slate-500 hover:text-white text-[10px] font-black uppercase tracking-widest shrink-0 transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {lineupSuggestion.map(({ id, player, pm }) => (
+              <div
+                key={id}
+                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-center min-w-[60px]"
+              >
+                <div className="text-amber-400 font-black text-xs">
+                  #{player.jersey}
+                </div>
+                <div className="text-slate-300 text-[9px] font-bold truncate max-w-[64px]">
+                  {player.name.split(" ")[0]}
+                </div>
+                <div
+                  className={`text-[9px] font-black mt-0.5 ${
+                    pm > 0
+                      ? "text-emerald-400"
+                      : pm < 0
+                        ? "text-red-400"
+                        : "text-slate-500"
+                  }`}
+                >
+                  {pm > 0 ? `+${pm}` : pm} +/-
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 📱 MAIN CONTENT GRID: Arranges the court and bench side-by-side on big screens, or stacked on phones. */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -566,190 +709,246 @@ export default function LiveView({
           )}
 
           {/* Loop through the 'court' list and create a Player Card for everyone currently playing. */}
-          {[...court]
-            .sort((a, b) => {
-              const pa = roster.find((r) => r.id === a);
-              const pb = roster.find((r) => r.id === b);
-              return (
-                parseInt(pa?.jersey || "0", 10) -
-                parseInt(pb?.jersey || "0", 10)
-              );
-            })
-            .map((id) => {
-              const p = roster.find((r) => r.id === id);
-              // Safety check: if player not found in roster, skip rendering to prevent crash
-              if (!p) return null;
+          <div className="max-h-[60vh] overflow-y-auto pr-2 space-y-3 custom-scrollbar">
+            {[...court]
+              .sort((a, b) => {
+                const pa = roster.find((r) => r.id === a);
+                const pb = roster.find((r) => r.id === b);
+                return (
+                  parseInt(pa?.jersey || "0", 10) -
+                  parseInt(pb?.jersey || "0", 10)
+                );
+              })
+              .map((id) => {
+                const p = roster.find((r) => r.id === id);
+                // Safety check: if player not found in roster, skip rendering to prevent crash
+                if (!p) return null;
 
-              // Default turnovers to 0 if they don't have any yet
-              const stats = playerStats[id] || {
-                score: 0,
-                fouls: 0,
-                turnovers: 0,
-              };
-              const isSelected = pendingSwapIds.includes(id);
-              const isSuggestedOut = assistedSuggestion?.courtId === id;
-              const timePlayed = playerTimes?.[id] || 0;
-              const pm = playerPlusMinus[id] || 0;
-              const streak = playerStreaks[id];
+                // Default turnovers to 0 if they don't have any yet
+                const stats = playerStats[id] || {
+                  score: 0,
+                  fouls: 0,
+                  turnovers: 0,
+                };
+                const isSelected = pendingSwapIds.includes(id);
+                const isSuggestedOut = assistedSuggestion?.courtId === id;
+                const timePlayed = playerTimes?.[id] || 0;
+                const pm = playerPlusMinus[id] || 0;
+                const streak = playerStreaks[id];
+                const stintSecs = courtStintSeconds[id] || 0;
+                const isHighMinutes = stintSecs >= 420 && stintSecs < 540;
+                const isCriticalMinutes = stintSecs >= 540;
+                const shouldSuggestSit =
+                  stats.fouls < 5 &&
+                  (stats.fouls >= 4 || (stats.fouls >= 3 && quarter <= 2));
 
-              return (
-                <React.Fragment key={id}>
-                  <div
-                    onClick={() => handleSwap(id)}
-                    className={`p-3 md:p-4 border-2 rounded-2xl transition-all shadow-sm flex flex-col gap-2.5 cursor-pointer ${
-                      isSelected
-                        ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100 scale-[1.01]"
-                        : isSuggestedOut
-                          ? "border-amber-400 bg-amber-50 ring-2 ring-amber-200"
-                          : "bg-white border-slate-100 hover:border-slate-200"
-                    }`}
-                  >
-                    {/* — Row 1: Player Identity — */}
-                    <div className="flex items-center justify-between min-w-0">
-                      <span className="font-black text-slate-800 text-lg md:text-xl truncate">
-                        #{p.jersey} {p.name}
-                      </span>
-                      <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                        {isSuggestedOut && (
-                          <span className="text-[8px] font-black bg-amber-400 text-slate-900 px-2 py-0.5 rounded uppercase tracking-widest">
-                            Sub Out
-                          </span>
-                        )}
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">
-                          {isSelected ? "Select sub ▸" : "Tap to sub"}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* — Row 2: Decision Signals — */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <div className="flex items-center gap-1 bg-slate-900 text-amber-400 px-2 py-1 rounded-lg border border-slate-700">
-                        <span className="text-[11px] font-black tabular-nums">
-                          {stats.score} PTS
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1 bg-blue-50 text-blue-600 px-2 py-1 rounded-lg border border-blue-100">
-                        <Clock size={11} className="shrink-0" />
-                        <span className="text-[11px] font-black tabular-nums">
-                          {formatTime(timePlayed)}
-                        </span>
-                      </div>
-                      <div
-                        className={`px-2 py-1 rounded-lg border text-[11px] font-black ${
-                          pm > 0
-                            ? "bg-emerald-50 text-emerald-600 border-emerald-100"
-                            : pm < 0
-                              ? "bg-red-50 text-red-600 border-red-100"
-                              : "bg-slate-100 text-slate-500 border-slate-200"
-                        }`}
-                      >
-                        +/- {pm > 0 ? `+${pm}` : pm}
-                      </div>
-                      {streak === "hot" && (
-                        <span
-                          className="text-base animate-bounce"
-                          title="Hot Hand (3+ Scores)"
-                        >
-                          🔥
-                        </span>
-                      )}
-                      {streak === "cold" && (
-                        <span
-                          className="text-base animate-pulse"
-                          title="Cold Streak (2+ TOs)"
-                        >
-                          ❄️
-                        </span>
-                      )}
-                    </div>
-
-                    {/* — Row 3: Score Buttons — */}
+                return (
+                  <React.Fragment key={id}>
                     <div
-                      onClick={(e) => e.stopPropagation()}
-                      className="grid grid-cols-3 bg-slate-100 p-1 rounded-xl gap-1"
+                      onClick={() => handleSwap(id)}
+                      className={`p-3 md:p-4 border-2 rounded-2xl transition-all shadow-sm flex flex-col gap-2.5 cursor-pointer ${
+                        isSelected
+                          ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100 scale-[1.01]"
+                          : isSuggestedOut
+                            ? "border-amber-400 bg-amber-50 ring-2 ring-amber-200"
+                            : shouldSuggestSit
+                              ? "border-orange-400 bg-orange-50/40 ring-1 ring-orange-200"
+                              : isCriticalMinutes
+                                ? "border-red-200 bg-red-50/30"
+                                : "bg-white border-slate-100 hover:border-slate-200"
+                      }`}
                     >
-                      {[1, 2, 3].map((val) => (
-                        <button
-                          key={val}
-                          onClick={() => addStat(id, "score", val)}
-                          className="h-12 bg-white rounded-lg font-black text-slate-800 shadow-sm hover:bg-slate-900 hover:text-white transition-all active:scale-95"
-                        >
-                          +{val}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* — Row 4: TO & Foul — */}
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      className="grid grid-cols-2 gap-2"
-                    >
-                      <button
-                        onClick={() => addStat(id, "turnovers", 1)}
-                        className="h-11 rounded-xl border-2 flex items-center justify-center gap-2 transition-all active:scale-95 bg-orange-50 border-orange-100 text-orange-600 hover:bg-orange-100"
-                      >
-                        <span className="text-[10px] font-black uppercase">
-                          TO
+                      {/* — Row 1: Player Identity — */}
+                      <div className="flex items-center justify-between min-w-0">
+                        <span className="font-black text-slate-800 text-lg md:text-xl truncate">
+                          #{p.jersey} {p.name}
                         </span>
-                        <span className="font-black text-xl leading-none">
-                          {stats.turnovers || 0}
-                        </span>
-                      </button>
-                      <button
-                        onClick={() => addStat(id, "fouls", 1)}
-                        className={`h-11 rounded-xl border-2 flex items-center justify-center gap-2 transition-all active:scale-95 ${
-                          stats.fouls >= 4
-                            ? "bg-red-600 border-red-600 text-white"
-                            : "bg-red-50 border-red-100 text-red-600 hover:bg-red-100"
-                        }`}
-                      >
-                        <span className="text-[10px] font-black uppercase">
-                          Foul
-                        </span>
-                        <span className="font-black text-xl leading-none">
-                          {stats.fouls}
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-                  {/* 🤝 ASSISTED SUB BANNER — shown below the tapped court player */}
-                  {isSuggestedOut &&
-                    assistedSuggestion?.type === "court_first" && (
-                      <div className="bg-blue-600 text-white rounded-2xl p-4 shadow-lg border border-blue-500">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <span className="text-[9px] font-black text-blue-200 uppercase tracking-[0.2em]">
-                              Assisted Sub
+                        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                          {isSuggestedOut && (
+                            <span className="text-[8px] font-black bg-amber-400 text-slate-900 px-2 py-0.5 rounded uppercase tracking-widest">
+                              Sub Out
                             </span>
-                            <div className="font-black text-base leading-tight mt-0.5 truncate">
-                              #{assistedSuggestion.courtPlayer?.jersey}{" "}
-                              {assistedSuggestion.courtPlayer?.name}{" "}
-                              <span className="text-blue-300">OUT</span>
-                            </div>
-                            <div className="text-sm text-blue-100 mt-0.5 truncate">
-                              → Suggested IN: #
-                              {assistedSuggestion.benchPlayer?.jersey}{" "}
-                              {assistedSuggestion.benchPlayer?.name}
-                            </div>
-                            <div className="text-[10px] font-black text-blue-300 uppercase tracking-wider mt-1">
-                              Why: {assistedSuggestion.reason}
-                            </div>
-                          </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleSwap(assistedSuggestion.benchId);
-                            }}
-                            className="min-h-[52px] px-5 bg-white text-blue-600 rounded-xl font-black text-xs uppercase tracking-widest shadow-md hover:bg-blue-50 active:scale-95 transition-all shrink-0"
-                          >
-                            Confirm
-                          </button>
+                          )}
+                          {shouldSuggestSit && (
+                            <span className="text-[10px] font-black bg-orange-500 text-white px-2 py-0.5 rounded uppercase tracking-widest animate-pulse">
+                              {stats.fouls} Fls — Sit?
+                            </span>
+                          )}
+                          {isCriticalMinutes && (
+                            <span className="text-[8px] font-black bg-red-100 text-red-600 border border-red-200 px-2 py-0.5 rounded uppercase tracking-widest animate-pulse">
+                              Rest Now
+                            </span>
+                          )}
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">
+                            {isSelected ? "Select sub ▸" : "Tap to sub"}
+                          </span>
                         </div>
                       </div>
-                    )}
-                </React.Fragment>
-              );
-            })}
+
+                      {/* — Row 2: Decision Signals — */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-1 bg-slate-900 text-amber-400 px-2 py-1 rounded-lg border border-slate-700">
+                          <span className="text-[11px] font-black tabular-nums">
+                            {stats.score} PTS
+                          </span>
+                        </div>
+                        <div
+                          className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] font-black ${
+                            isCriticalMinutes
+                              ? "bg-red-50 text-red-600 border-red-200"
+                              : isHighMinutes
+                                ? "bg-amber-50 text-amber-600 border-amber-200"
+                                : "bg-blue-50 text-blue-600 border-blue-100"
+                          }`}
+                        >
+                          <Clock size={11} className="shrink-0" />
+                          <span className="tabular-nums">
+                            {formatTime(timePlayed)}
+                          </span>
+                        </div>
+                        <div
+                          className={`px-2 py-1 rounded-lg border text-[11px] font-black ${
+                            pm > 0
+                              ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                              : pm < 0
+                                ? "bg-red-50 text-red-600 border-red-100"
+                                : "bg-slate-100 text-slate-500 border-slate-200"
+                          }`}
+                        >
+                          +/- {pm > 0 ? `+${pm}` : pm}
+                        </div>
+                        {streak === "hot" && (
+                          <span
+                            className="text-base animate-bounce"
+                            title="Hot Hand (3+ Scores)"
+                          >
+                            🔥
+                          </span>
+                        )}
+                        {streak === "cold" && (
+                          <span
+                            className="text-base animate-pulse"
+                            title="Cold Streak (2+ TOs)"
+                          >
+                            ❄️
+                          </span>
+                        )}
+                        {(isHighMinutes || isCriticalMinutes) && (
+                          <span
+                            className={`text-base ${isCriticalMinutes ? "animate-pulse" : ""}`}
+                            title={isCriticalMinutes ? "High fatigue — rest now" : "Getting tired — rest soon"}
+                          >
+                            😮‍💨
+                          </span>
+                        )}
+                      </div>
+
+                      {/* — Fatigue Advisory — */}
+                      {(isHighMinutes || isCriticalMinutes) && (
+                        <div
+                          className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-black ${
+                            isCriticalMinutes
+                              ? "bg-red-50 text-red-600 border border-red-100"
+                              : "bg-amber-50 text-amber-700 border border-amber-100"
+                          }`}
+                        >
+                          <Timer size={10} className="shrink-0" />
+                          <span>
+                            {isCriticalMinutes
+                              ? `${formatTime(stintSecs)} straight — sub them out now`
+                              : `${formatTime(stintSecs)} on court — consider resting soon`}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* — Row 3: Score Buttons — */}
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="grid grid-cols-3 bg-slate-100 p-1 rounded-xl gap-1"
+                      >
+                        {[1, 2, 3].map((val) => (
+                          <button
+                            key={val}
+                            onClick={() => addStat(id, "score", val)}
+                            className="h-12 bg-white rounded-lg font-black text-slate-800 shadow-sm hover:bg-slate-900 hover:text-white transition-all active:scale-95"
+                          >
+                            +{val}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* — Row 4: TO & Foul — */}
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="grid grid-cols-2 gap-2"
+                      >
+                        <button
+                          onClick={() => addStat(id, "turnovers", 1)}
+                          className="h-11 rounded-xl border-2 flex items-center justify-center gap-2 transition-all active:scale-95 bg-orange-50 border-orange-100 text-orange-600 hover:bg-orange-100"
+                        >
+                          <span className="text-[10px] font-black uppercase">
+                            TO
+                          </span>
+                          <span className="font-black text-xl leading-none">
+                            {stats.turnovers || 0}
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => addStat(id, "fouls", 1)}
+                          className={`h-11 rounded-xl border-2 flex items-center justify-center gap-2 transition-all active:scale-95 ${
+                            stats.fouls >= 4
+                              ? "bg-red-600 border-red-600 text-white"
+                              : "bg-red-50 border-red-100 text-red-600 hover:bg-red-100"
+                          }`}
+                        >
+                          <span className="text-[10px] font-black uppercase">
+                            Foul
+                          </span>
+                          <span className="font-black text-xl leading-none">
+                            {stats.fouls}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                    {/* 🤝 ASSISTED SUB BANNER — shown below the tapped court player */}
+                    {isSuggestedOut &&
+                      assistedSuggestion?.type === "court_first" && (
+                        <div className="bg-blue-600 text-white rounded-2xl p-4 shadow-lg border border-blue-500">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <span className="text-[9px] font-black text-blue-200 uppercase tracking-[0.2em]">
+                                Assisted Sub
+                              </span>
+                              <div className="font-black text-base leading-tight mt-0.5 truncate">
+                                #{assistedSuggestion.courtPlayer?.jersey}{" "}
+                                {assistedSuggestion.courtPlayer?.name}{" "}
+                                <span className="text-blue-300">OUT</span>
+                              </div>
+                              <div className="text-sm text-blue-100 mt-0.5 truncate">
+                                → Suggested IN: #
+                                {assistedSuggestion.benchPlayer?.jersey}{" "}
+                                {assistedSuggestion.benchPlayer?.name}
+                              </div>
+                              <div className="text-[10px] font-black text-blue-300 uppercase tracking-wider mt-1">
+                                Why: {assistedSuggestion.reason}
+                              </div>
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSwap(assistedSuggestion.benchId);
+                              }}
+                              className="min-h-[52px] px-5 bg-white text-blue-600 rounded-xl font-black text-xs uppercase tracking-widest shadow-md hover:bg-blue-50 active:scale-95 transition-all shrink-0"
+                            >
+                              Confirm
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                  </React.Fragment>
+                );
+              })}
+          </div>
         </div>
 
         {/* 🪑 3. BENCH SECTION (SIDEBAR): Shows players waiting to sub in, and tracks team fouls/timeouts. */}
@@ -759,7 +958,7 @@ export default function LiveView({
             <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">
               Available Bench
             </h3>
-            <div className="grid grid-cols-2 lg:grid-cols-1 gap-2">
+            <div className="grid grid-cols-2 lg:grid-cols-1 gap-2 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
               {/* Look through the whole roster, but only show players who are NOT on the court. */}
               {roster
                 .filter((p) => !court.includes(p.id))
@@ -819,7 +1018,7 @@ export default function LiveView({
                                 !isSuggestedIn &&
                                 !isFouledOut && (
                                   <span className="text-[8px] font-black bg-amber-400 text-slate-900 px-1.5 py-0.5 rounded uppercase tracking-widest shrink-0">
-                                    Q{quarter - 1}
+                                    Played Last Q{quarter - 1}
                                   </span>
                                 )}
                             </div>

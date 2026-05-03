@@ -1540,9 +1540,9 @@ export default function StatsView({
                 {/* Player chips */}
                 <div className="flex flex-wrap gap-2 mb-4">
                   {(insightsData.bestLineup
-                    ? insightsData.bestLineup.players.map((pid) => ({
-                        id: pid,
-                        player: roster.find((r) => r.id === pid),
+                    ? insightsData.bestLineup.players.map((p) => ({
+                        id: p.id,
+                        player: p,
                         time: null,
                       }))
                     : insightsData.quarterTopPlayers.map((x) => ({

@@ -481,7 +481,9 @@ export default function App() {
 
   // Keep a ref in sync with user so the Axios interceptor can read it without stale closures
   const userRef = useRef(user);
-  useEffect(() => { userRef.current = user; }, [user]);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   // Global 401 interceptor — shows SessionExpiredModal instead of redirecting
   useEffect(() => {
@@ -519,8 +521,12 @@ export default function App() {
   const buildPayloadRef = useRef(null);
   const isOnlineRef = useRef(isOnline);
   const gameSessionIdRef = useRef(gameSessionId);
-  useEffect(() => { isOnlineRef.current = isOnline; }, [isOnline]);
-  useEffect(() => { gameSessionIdRef.current = gameSessionId; }, [gameSessionId]);
+  useEffect(() => {
+    isOnlineRef.current = isOnline;
+  }, [isOnline]);
+  useEffect(() => {
+    gameSessionIdRef.current = gameSessionId;
+  }, [gameSessionId]);
 
   // 60-second heartbeat auto-save — silently pushes current state to the cloud
   useEffect(() => {
@@ -542,7 +548,7 @@ export default function App() {
     if (isOnline && syncQueue.length > 0 && !isSyncing) {
       flushSyncQueueRef.current?.();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOnline]);
 
   // Session Check
@@ -1374,8 +1380,18 @@ export default function App() {
         });
         newCourt[index] = pIn;
         newActions.push(
-          { type: "SUB_IN", playerId: pIn, clock: coachingClock, quarter: coachingQuarter },
-          { type: "SUB_OUT", playerId: pOut, clock: coachingClock, quarter: coachingQuarter },
+          {
+            type: "SUB_IN",
+            playerId: pIn,
+            clock: coachingClock,
+            quarter: coachingQuarter,
+          },
+          {
+            type: "SUB_OUT",
+            playerId: pOut,
+            clock: coachingClock,
+            quarter: coachingQuarter,
+          },
         );
       });
 
@@ -1646,10 +1662,12 @@ export default function App() {
 
     const finalRosterWithMins = roster.map((player) => {
       let totalSeconds = 0;
-      stints.filter((s) => s.playerId === player.id).forEach((s) => {
-        const out = s.clockOut !== null ? s.clockOut : coachingClock;
-        totalSeconds += s.clockIn - out;
-      });
+      stints
+        .filter((s) => s.playerId === player.id)
+        .forEach((s) => {
+          const out = s.clockOut !== null ? s.clockOut : coachingClock;
+          totalSeconds += s.clockIn - out;
+        });
       return {
         ...player,
         name: (player.name || "").trim(),
@@ -1670,18 +1688,29 @@ export default function App() {
             qSecs += s.clockIn - out;
           });
         const qPts = actionHistory
-          .filter((a) => a.playerId === p.id && a.quarter === q && a.type === "score")
+          .filter(
+            (a) => a.playerId === p.id && a.quarter === q && a.type === "score",
+          )
           .reduce((sum, a) => sum + a.amount, 0);
         const qFls = actionHistory
-          .filter((a) => a.playerId === p.id && a.quarter === q && a.type === "fouls")
+          .filter(
+            (a) => a.playerId === p.id && a.quarter === q && a.type === "fouls",
+          )
           .reduce((sum, a) => sum + a.amount, 0);
         const qTOs = actionHistory
-          .filter((a) => a.playerId === p.id && a.quarter === q && a.type === "turnovers")
+          .filter(
+            (a) =>
+              a.playerId === p.id && a.quarter === q && a.type === "turnovers",
+          )
           .reduce((sum, a) => sum + a.amount, 0);
         if (qSecs > 0 || qPts > 0 || qFls > 0 || qTOs > 0) {
           calculatedQuarterStats.push({
-            playerId: p.id, quarter: q,
-            points: qPts, fouls: qFls, turnovers: qTOs, secondsPlayed: qSecs,
+            playerId: p.id,
+            quarter: q,
+            points: qPts,
+            fouls: qFls,
+            turnovers: qTOs,
+            secondsPlayed: qSecs,
           });
         }
       });
@@ -1751,7 +1780,9 @@ export default function App() {
           createdAt: new Date().toISOString(),
         },
       ]);
-      showNotification("No connection — scoresheet queued. Will sync when online.");
+      showNotification(
+        "No connection — scoresheet queued. Will sync when online.",
+      );
       // Still call onGameSaved so the UI resets cleanly
       setCommitteeGameData(null);
       setCommitteeQuarter(1);
