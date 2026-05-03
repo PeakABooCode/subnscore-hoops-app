@@ -1275,6 +1275,8 @@ function TeamPlayersSection({
   const [isAddingLate, setIsAddingLate] = useState(false);
   const [lateName, setLateName] = useState("");
   const [lateJersey, setLateJersey] = useState("");
+  // Only one bench player can be expanded at a time — clicking another auto-closes the previous
+  const [expandedBenchId, setExpandedBenchId] = useState(null);
 
   return (
     <div
@@ -1334,7 +1336,14 @@ function TeamPlayersSection({
                 onStat={onStat}
                 color={color}
                 isSelected={selectedPlayers.includes(player.id)}
-                onSelect={() => onPlayerSelect(teamSide, player.id)}
+                onSelect={() => {
+                  onPlayerSelect(teamSide, player.id);
+                  // Toggle expansion; clicking a new player auto-closes the previous
+                  setExpandedBenchId((prev) =>
+                    prev === player.id ? null : player.id,
+                  );
+                }}
+                isExpanded={expandedBenchId === player.id}
                 isOnCourt={false}
               />
             ))
@@ -1411,6 +1420,7 @@ function PlayerCard({
   isSelected,
   onSelect,
   isOnCourt,
+  isExpanded = false,
 }) {
   const themeColor = color === "blue" ? "blue" : "red";
   const pStats = stats || {
@@ -1421,6 +1431,16 @@ function PlayerCard({
     steals: 0,
   };
   const isFouledOut = pStats.fouls >= 5;
+
+  // Pseudo-code: each stat type gets its own color so officials can tap fast without reading.
+  // ELI5: like colored keys on a keyboard — muscle memory after a few games.
+  // +1 = emerald (free throw, clean), +2 = blue (standard field goal), +3 = violet (three, special)
+  // REB = orange (hustle), AST = sky (team play), STL = amber (exciting turnover)
+  const scoreColors = {
+    1: "bg-emerald-500 hover:bg-emerald-600",
+    2: "bg-blue-500 hover:bg-blue-600",
+    3: "bg-violet-500 hover:bg-violet-600",
+  };
 
   return (
     <div
@@ -1474,8 +1494,8 @@ function PlayerCard({
           </div>
         </div>
 
-        {/* Foul + stat buttons visible for on-court players always, bench players when selected */}
-        {(isOnCourt || isSelected) && (
+        {/* Foul button: on-court always visible; bench visible when expanded */}
+        {(isOnCourt || isExpanded) && (
           <div className="flex items-center gap-1.5">
             <button
               disabled={isFouledOut}
@@ -1484,7 +1504,7 @@ function PlayerCard({
               className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl transition-all ${
                 isFouledOut
                   ? "bg-slate-100 text-slate-300 cursor-not-allowed"
-                  : "bg-white border-2 border-red-100 text-red-500 hover:bg-red-600 hover:text-white shadow-sm"
+                  : "bg-red-500 hover:bg-red-600 text-white shadow-sm active:scale-95"
               }`}
             >
               <ShieldAlert size={16} />
@@ -1494,15 +1514,15 @@ function PlayerCard({
         )}
       </div>
 
-      {/* Action buttons — always for on-court; for bench when selected (tap to expand) */}
-      {(isOnCourt || isSelected) && !isFouledOut && (
+      {/* Score + stat buttons: on-court always; bench when expanded (tap card to toggle) */}
+      {(isOnCourt || isExpanded) && !isFouledOut && (
         <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-slate-200">
           <div className="grid grid-cols-3 gap-2">
             {[1, 2, 3].map((pts) => (
               <button
                 key={pts}
                 onClick={() => onScore(player.id, pts)}
-                className={`bg-${themeColor}-600 hover:bg-${themeColor}-700 text-white py-2 rounded-xl font-black text-sm transition-all active:scale-95 shadow-md`}
+                className={`${scoreColors[pts]} text-white py-2 rounded-xl font-black text-sm transition-all active:scale-95 shadow-md`}
               >
                 +{pts}
               </button>
@@ -1511,19 +1531,19 @@ function PlayerCard({
           <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => onStat(player.id, "REBOUND")}
-              className="bg-slate-200 hover:bg-slate-300 text-slate-700 py-1.5 rounded-xl font-black text-[10px] transition-all shadow-sm"
+              className="bg-orange-500 hover:bg-orange-600 text-white py-1.5 rounded-xl font-black text-[10px] transition-all shadow-sm active:scale-95"
             >
               REB
             </button>
             <button
               onClick={() => onStat(player.id, "ASSIST")}
-              className="bg-slate-200 hover:bg-slate-300 text-slate-700 py-1.5 rounded-xl font-black text-[10px] transition-all shadow-sm"
+              className="bg-sky-500 hover:bg-sky-600 text-white py-1.5 rounded-xl font-black text-[10px] transition-all shadow-sm active:scale-95"
             >
               AST
             </button>
             <button
               onClick={() => onStat(player.id, "STEAL")}
-              className="bg-slate-200 hover:bg-slate-300 text-slate-700 py-1.5 rounded-xl font-black text-[10px] transition-all shadow-sm"
+              className="bg-amber-400 hover:bg-amber-500 text-slate-900 py-1.5 rounded-xl font-black text-[10px] transition-all shadow-sm active:scale-95"
             >
               STL
             </button>
