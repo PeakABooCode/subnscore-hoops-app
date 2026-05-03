@@ -13,6 +13,7 @@ import {
   ShieldAlert,
   Edit3,
   Timer,
+  Smartphone,
 } from "lucide-react";
 import { formatTime, QUARTER_SECONDS, getFibaTimeoutInfo, haptic } from "../../utils/helpers";
 import InputModal from "../common/InputModal";
@@ -59,6 +60,19 @@ export default function LiveView({
     () => getFibaTimeoutInfo(quarter, clock, timeouts),
     [quarter, clock, timeouts]
   );
+
+  // Pseudo-code: "Is vibration turned on?" — reads from localStorage so it persists across games.
+  // ELI5: A light switch the coach can flip mid-game; turning it on gives a confirmation buzz.
+  // Data State: hapticOn true/false drives the toggle button label and bg color
+  const [hapticOn, setHapticOn] = useState(
+    () => localStorage.getItem("subnscore_hapticEnabled") !== "false"
+  );
+  const toggleHaptic = () => {
+    const next = !hapticOn;
+    setHapticOn(next);
+    localStorage.setItem("subnscore_hapticEnabled", String(next));
+    if (next) haptic(50); // confirm it turned on with a single buzz
+  };
 
   const handleSaveClock = (val) => {
     let newSeconds = clock;
@@ -1194,6 +1208,21 @@ export default function LiveView({
             >
               <History size={14} /> Undo Mistake
             </button>
+
+            {/* Haptic toggle — only shown on devices that support vibration */}
+            {typeof navigator !== "undefined" && navigator.vibrate && (
+              <button
+                onClick={toggleHaptic}
+                className={`w-full py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 border ${
+                  hapticOn
+                    ? "bg-slate-700 text-amber-400 border-slate-600"
+                    : "bg-slate-800 text-slate-500 border-slate-700"
+                }`}
+              >
+                <Smartphone size={13} />
+                Vibration {hapticOn ? "On" : "Off"}
+              </button>
+            )}
           </div>
 
           {/* Advance Quarter Button 
