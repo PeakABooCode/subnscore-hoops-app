@@ -151,23 +151,33 @@ export default function CommitteeLiveView({
     return stats;
   }, [logs, initialData, latePlayersA, latePlayersB]);
 
-  // Initialize lineups
+  // Initialize lineups — use pre-selected starting 5 if provided, else fall back to jersey sort
   useEffect(() => {
-    const sortRoster = (roster) =>
-      [...roster].sort((a, b) => {
-        const numA = parseInt(a.jersey, 10) || 0;
-        const numB = parseInt(b.jersey, 10) || 0;
-        return numA - numB;
-      });
+    const sortByJersey = (roster) =>
+      [...roster].sort(
+        (a, b) => (parseInt(a.jersey, 10) || 0) - (parseInt(b.jersey, 10) || 0),
+      );
 
-    const sortedA = sortRoster(initialData.teamARoster);
-    const sortedB = sortRoster(initialData.teamBRoster);
+    const sortedA = sortByJersey(initialData.teamARoster);
+    const sortedB = sortByJersey(initialData.teamBRoster);
+    const startA = initialData.startingFiveA || [];
+    const startB = initialData.startingFiveB || [];
 
-    // Initialize on-court and bench players (first 5 on court)
-    setTeamAOnCourt(sortedA.slice(0, 5));
-    setTeamABench(sortedA.slice(5));
-    setTeamBOnCourt(sortedB.slice(0, 5));
-    setTeamBBench(sortedB.slice(5));
+    if (startA.length === 5) {
+      setTeamAOnCourt(initialData.teamARoster.filter((p) => startA.includes(p.id)));
+      setTeamABench(initialData.teamARoster.filter((p) => !startA.includes(p.id)));
+    } else {
+      setTeamAOnCourt(sortedA.slice(0, 5));
+      setTeamABench(sortedA.slice(5));
+    }
+
+    if (startB.length === 5) {
+      setTeamBOnCourt(initialData.teamBRoster.filter((p) => startB.includes(p.id)));
+      setTeamBBench(initialData.teamBRoster.filter((p) => !startB.includes(p.id)));
+    } else {
+      setTeamBOnCourt(sortedB.slice(0, 5));
+      setTeamBBench(sortedB.slice(5));
+    }
   }, [initialData]);
 
   // --- AUDIO BUZZER LOGIC ---
@@ -618,7 +628,7 @@ export default function CommitteeLiveView({
   const setInitialJumpBall = (winner) => {
     const arrowPointsTo = winner === "A" ? "B" : "A";
     setPossessionArrow(arrowPointsTo);
-    showNotification(`Arrow points to Team ${arrowPointsTo}`);
+    setIsRunning(true); // Tip-off won — game clock starts immediately
     addLog({
       type: "GAME_START",
       winner,
@@ -626,6 +636,7 @@ export default function CommitteeLiveView({
       quarter: 1,
       clock: quarterSeconds,
     });
+    showNotification(`Tip-off won by ${winner === "A" ? initialData.teamAName : initialData.teamBName} — clock started`);
   };
 
   const advanceQuarter = () => {

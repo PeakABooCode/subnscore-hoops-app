@@ -14,6 +14,7 @@ import {
   Edit2,
   Search,
   Clock,
+  Star,
 } from "lucide-react";
 import TeamSelectionModal from "../common/TeamSelectionModal";
 import OfficialGameDetailsModal from "./OfficialGameDetailsModal";
@@ -50,6 +51,8 @@ export default function CommitteeDashboardView({
   // Separate state for Team A and Team B
   const [teamA, setTeamA] = useState({ name: "", roster: [] });
   const [teamB, setTeamB] = useState({ name: "", roster: [] });
+  const [startingFiveA, setStartingFiveA] = useState([]);
+  const [startingFiveB, setStartingFiveB] = useState([]);
 
   // Input state for adding players
   const [newPlayerA, setNewPlayerA] = useState({ name: "", jersey: "" });
@@ -185,21 +188,28 @@ export default function CommitteeDashboardView({
       const res = await axios.get(
         `/api/coaching/teams/roster/${encodeURIComponent(team.name)}`,
       );
-      // Map DB players to local state format
       const roster = res.data.map((p) => ({
         id: p.id,
         name: p.name,
         jersey: p.jersey.toString(),
       }));
 
+      // Auto-select first 5 starters by jersey number when a roster loads
+      const sorted = [...roster].sort(
+        (a, b) => (parseInt(a.jersey, 10) || 0) - (parseInt(b.jersey, 10) || 0),
+      );
+      const defaultFive = sorted.slice(0, 5).map((p) => p.id);
+
       if (side === "A") {
         setTeamA({ name: team.name, roster });
+        setStartingFiveA(defaultFive);
       } else {
         setTeamB({ name: team.name, roster });
+        setStartingFiveB(defaultFive);
       }
       if (!league && team.league) setLeague(team.league);
       if (!season && team.season) setSeason(team.season);
-      if (!division && team.division) setDivision(team.division); // Populate division
+      if (!division && team.division) setDivision(team.division);
       showNotification(`Loaded roster for ${team.name}`);
     } catch (err) {
       showNotification("Failed to load team roster.");
@@ -276,17 +286,21 @@ export default function CommitteeDashboardView({
     if (isA) {
       setTeamA({ ...teamA, roster: [...teamA.roster, player] });
       setNewPlayerA({ name: "", jersey: "" });
+      if (startingFiveA.length < 5) setStartingFiveA([...startingFiveA, player.id]);
     } else {
       setTeamB({ ...teamB, roster: [...teamB.roster, player] });
       setNewPlayerB({ name: "", jersey: "" });
+      if (startingFiveB.length < 5) setStartingFiveB([...startingFiveB, player.id]);
     }
   };
 
   const handleRemovePlayer = (side, id) => {
     if (side === "A") {
       setTeamA({ ...teamA, roster: teamA.roster.filter((p) => p.id !== id) });
+      setStartingFiveA((prev) => prev.filter((sid) => sid !== id));
     } else {
       setTeamB({ ...teamB, roster: teamB.roster.filter((p) => p.id !== id) });
+      setStartingFiveB((prev) => prev.filter((sid) => sid !== id));
     }
   };
 
@@ -325,6 +339,8 @@ export default function CommitteeDashboardView({
         teamAPlayerMap: res.data.teamAPlayerMap,
         teamBPlayerMap: res.data.teamBPlayerMap,
         quarterDuration: parseInt(quarterDuration, 10) || 10,
+        startingFiveA,
+        startingFiveB,
       });
     } catch (err) {
       console.error("Initialization error:", err);
@@ -761,8 +777,18 @@ export default function CommitteeDashboardView({
               availableTeams={filteredTeams}
               onSelectTeam={(team) => handleSelectTeam("A", team)}
               setupAttempted={setupAttempted}
-              userRole={user.role} // Pass user role to TeamEntrySection
+              userRole={user.role}
               showNotification={showNotification}
+              startingFive={startingFiveA}
+              onToggleStarter={(id) => {
+                if (startingFiveA.includes(id)) {
+                  setStartingFiveA(startingFiveA.filter((sid) => sid !== id));
+                } else if (startingFiveA.length < 5) {
+                  setStartingFiveA([...startingFiveA, id]);
+                } else {
+                  showNotification("Already 5 starters selected for Team A.");
+                }
+              }}
             />
             <TeamEntrySection
               side="B"
@@ -775,9 +801,19 @@ export default function CommitteeDashboardView({
               onRemove={(id) => handleRemovePlayer("B", id)}
               availableTeams={filteredTeams}
               onSelectTeam={(team) => handleSelectTeam("B", team)}
-              userRole={user.role} // Pass user role to TeamEntrySection
+              userRole={user.role}
               setupAttempted={setupAttempted}
               showNotification={showNotification}
+              startingFive={startingFiveB}
+              onToggleStarter={(id) => {
+                if (startingFiveB.includes(id)) {
+                  setStartingFiveB(startingFiveB.filter((sid) => sid !== id));
+                } else if (startingFiveB.length < 5) {
+                  setStartingFiveB([...startingFiveB, id]);
+                } else {
+                  showNotification("Already 5 starters selected for Team B.");
+                }
+              }}
             />
           </div>
 
@@ -859,6 +895,8 @@ function TeamEntrySection({
   setupAttempted,
   userRole,
   showNotification,
+  startingFive = [],
+  onToggleStarter,
 }) {
   const accentBorder = color === "blue" ? "border-blue-500" : "border-red-500";
   const iconColor = color === "blue" ? "text-blue-500" : "text-red-500";
@@ -1007,7 +1045,24 @@ function TeamEntrySection({
         </div>
       </div>
 
-      <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
+      {/* Starting 5 counter — shows how many starters are picked */}
+      <div className="flex items-center justify-between px-1 mb-1">
+        <span className="text-[10px] font-black uppercase text-slate-500">
+          Roster
+        </span>
+        <span
+          className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full flex items-center gap-1 ${
+            startingFive.length === 5
+              ? "bg-emerald-100 text-emerald-700"
+              : "bg-amber-100 text-amber-700"
+          }`}
+        >
+          <Star size={10} fill={startingFive.length === 5 ? "currentColor" : "none"} />
+          Starting 5: {startingFive.length}/5
+        </span>
+      </div>
+
+      <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
         {teamData.roster.length === 0 ? (
           <div className="py-10 text-center border-2 border-dashed border-slate-50 rounded-2xl">
             <p className="text-xs text-slate-300 font-black uppercase tracking-widest italic">
@@ -1087,7 +1142,19 @@ function TeamEntrySection({
                     {p.name}
                   </span>
                 </div>
-                <div className="flex gap-1">
+                <div className="flex gap-1 items-center">
+                  {/* Starter toggle — tap star to add/remove from starting 5 */}
+                  <button
+                    onClick={() => onToggleStarter(p.id)}
+                    title={startingFive.includes(p.id) ? "Remove from starting 5" : "Add to starting 5"}
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
+                      startingFive.includes(p.id)
+                        ? "bg-amber-400 text-slate-900 shadow-sm"
+                        : "bg-slate-100 text-slate-400 hover:bg-amber-100 hover:text-amber-600"
+                    }`}
+                  >
+                    <Star size={14} fill={startingFive.includes(p.id) ? "currentColor" : "none"} />
+                  </button>
                   <button
                     onClick={() => {
                       setEditingId(p.id);
