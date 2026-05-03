@@ -191,9 +191,11 @@ export const calculateLineupStats = (
             turnovers: 0,
             fouls: 0,
             pointsTrend: [0], // Start every lineup trend at zero
+            quarters: new Set(),
           };
         }
         lineupStats[lineupKey].totalTime += duration;
+        lineupStats[lineupKey].quarters.add(q);
 
         // Collect all actions that occurred during this stable interval
         const intervalActions = actionHistory.filter(
@@ -266,8 +268,8 @@ export const calculateLineupStats = (
   }
 
   // Convert the object to an array and sort it for consistent display
-  return Object.values(lineupStats).sort((a, b) => {
-    // Sort by total time descending, then by points descending
-    return b.totalTime - a.totalTime || b.pointsScored - a.pointsScored;
-  });
+  // Pseudo-code: convert each lineup's quarters Set → sorted array before returning
+  return Object.values(lineupStats)
+    .map((l) => ({ ...l, quarters: [...l.quarters].sort((a, b) => a - b) }))
+    .sort((a, b) => b.totalTime - a.totalTime || b.pointsScored - a.pointsScored);
 };

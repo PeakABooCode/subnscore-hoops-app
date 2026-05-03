@@ -1208,9 +1208,22 @@ export default function StatsView({
                             </div>
                           ))}
                         </div>
+                        {/* Quarter badges — which periods this lineup appeared in */}
+                        {lineup.quarters?.length > 0 && (
+                          <div className="flex gap-1 mt-1.5 flex-wrap">
+                            {lineup.quarters.map((q) => (
+                              <span
+                                key={q}
+                                className="text-[8px] font-black bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded uppercase tracking-tighter border border-slate-200"
+                              >
+                                {q > 4 ? `OT${q - 4}` : `Q${q}`}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
 
-                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-4 w-full lg:w-auto pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
+                      <div className="grid grid-cols-3 sm:grid-cols-7 gap-2 sm:gap-3 w-full lg:w-auto pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
                         <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-white lg:bg-transparent border lg:border-0 border-slate-50">
                           <span className="text-[8px] font-black uppercase text-slate-400 mb-1">
                             +/-
@@ -1252,18 +1265,57 @@ export default function StatsView({
                             {lineup.turnovers || 0} / {lineup.fouls || 0}
                           </span>
                         </div>
-                        <div className="flex flex-col items-center justify-center bg-slate-900 rounded-lg px-2 py-1">
-                          <span className="text-[8px] font-black uppercase text-slate-400">
-                            PPM
+                        {/* EFF = pts − TOs — hidden on mobile (grid has 3 cols there) */}
+                        <div className="hidden sm:flex flex-col items-center justify-center bg-blue-50 rounded-lg px-2 py-1">
+                          <span className="text-[8px] font-black uppercase text-blue-400">
+                            EFF
                           </span>
-                          <span className="text-xs font-black text-amber-400">
-                            {lineup.totalTime > 0
-                              ? (
-                                  lineup.pointsScored /
-                                  (lineup.totalTime / 60)
-                                ).toFixed(1)
-                              : "0.0"}
+                          <span
+                            className={`text-xs font-black ${
+                              lineup.pointsScored - (lineup.turnovers || 0) > 0
+                                ? "text-blue-700"
+                                : "text-slate-400"
+                            }`}
+                          >
+                            {lineup.pointsScored - (lineup.turnovers || 0) > 0
+                              ? "+"
+                              : ""}
+                            {lineup.pointsScored - (lineup.turnovers || 0)}
                           </span>
+                        </div>
+                        {/* PPM (ours) / Def (opponent PPM) — same dark cell, split vertically */}
+                        <div className="flex flex-col items-center justify-center bg-slate-900 rounded-lg px-2 py-1 w-fit">
+                          <div className="flex items-center gap-1.5">
+                            <div className="flex flex-col items-center">
+                              <span className="text-[7px] font-black uppercase text-slate-400 leading-none">
+                                PPM
+                              </span>
+                              <span className="text-xs font-black text-amber-400 leading-none mt-0.5">
+                                {lineup.totalTime > 0
+                                  ? (
+                                      lineup.pointsScored /
+                                      (lineup.totalTime / 60)
+                                    ).toFixed(1)
+                                  : "0.0"}
+                              </span>
+                            </div>
+                            <span className="text-[8px] font-black text-slate-600">
+                              /
+                            </span>
+                            <div className="flex flex-col items-center">
+                              <span className="text-[7px] font-black uppercase text-slate-500 leading-none">
+                                Def
+                              </span>
+                              <span className="text-xs font-black text-red-400 leading-none mt-0.5">
+                                {lineup.totalTime > 0
+                                  ? (
+                                      (lineup.pointsAgainst || 0) /
+                                      (lineup.totalTime / 60)
+                                    ).toFixed(1)
+                                  : "0.0"}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
