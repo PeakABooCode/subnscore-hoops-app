@@ -1432,15 +1432,6 @@ function PlayerCard({
   };
   const isFouledOut = pStats.fouls >= 5;
 
-  // Pseudo-code: each stat type gets its own color so officials can tap fast without reading.
-  // ELI5: like colored keys on a keyboard — muscle memory after a few games.
-  // +1 = emerald (free throw, clean), +2 = blue (standard field goal), +3 = violet (three, special)
-  // REB = orange (hustle), AST = sky (team play), STL = amber (exciting turnover)
-  const scoreColors = {
-    1: "bg-emerald-500 hover:bg-emerald-600",
-    2: "bg-blue-500 hover:bg-blue-600",
-    3: "bg-violet-500 hover:bg-violet-600",
-  };
 
   return (
     <div
@@ -1472,24 +1463,28 @@ function PlayerCard({
             >
               {player.name}
             </span>
-            <div className="flex flex-wrap gap-2 mt-0.5">
-              <span className="text-[10px] font-black text-slate-400 uppercase">
-                PTS: {pStats.points}
-              </span>
-              <span
-                className={`text-[10px] font-black uppercase ${pStats.fouls >= 4 ? "text-red-600" : "text-slate-400"}`}
-              >
-                FLS: {pStats.fouls}/5
-              </span>
-              <span className="text-[10px] font-black text-slate-400 uppercase">
-                REB: {pStats.rebounds}
-              </span>
-              <span className="text-[10px] font-black text-slate-400 uppercase">
-                AST: {pStats.assists}
-              </span>
-              <span className="text-[10px] font-black text-slate-400 uppercase">
-                STL: {pStats.steals}
-              </span>
+            {/* Stat chips — label above value, subtle bg per category */}
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              <div className="flex flex-col items-center bg-blue-50 text-blue-700 px-2 py-0.5 rounded-lg min-w-[32px]">
+                <span className="text-[7px] font-black uppercase leading-none">PTS</span>
+                <span className="text-sm font-black leading-tight">{pStats.points}</span>
+              </div>
+              <div className={`flex flex-col items-center px-2 py-0.5 rounded-lg min-w-[32px] ${pStats.fouls >= 4 ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-500"}`}>
+                <span className="text-[7px] font-black uppercase leading-none">FLS</span>
+                <span className="text-sm font-black leading-tight">{pStats.fouls}/5</span>
+              </div>
+              <div className="flex flex-col items-center bg-slate-100 text-slate-600 px-2 py-0.5 rounded-lg min-w-[32px]">
+                <span className="text-[7px] font-black uppercase leading-none">REB</span>
+                <span className="text-sm font-black leading-tight">{pStats.rebounds}</span>
+              </div>
+              <div className="flex flex-col items-center bg-slate-100 text-slate-600 px-2 py-0.5 rounded-lg min-w-[32px]">
+                <span className="text-[7px] font-black uppercase leading-none">AST</span>
+                <span className="text-sm font-black leading-tight">{pStats.assists}</span>
+              </div>
+              <div className="flex flex-col items-center bg-slate-100 text-slate-600 px-2 py-0.5 rounded-lg min-w-[32px]">
+                <span className="text-[7px] font-black uppercase leading-none">STL</span>
+                <span className="text-sm font-black leading-tight">{pStats.steals}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -1504,7 +1499,7 @@ function PlayerCard({
               className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl transition-all ${
                 isFouledOut
                   ? "bg-slate-100 text-slate-300 cursor-not-allowed"
-                  : "bg-red-500 hover:bg-red-600 text-white shadow-sm active:scale-95"
+                  : "bg-white border-2 border-red-100 text-red-500 hover:bg-red-600 hover:text-white shadow-sm active:scale-95"
               }`}
             >
               <ShieldAlert size={16} />
@@ -1522,7 +1517,7 @@ function PlayerCard({
               <button
                 key={pts}
                 onClick={() => onScore(player.id, pts)}
-                className={`${scoreColors[pts]} text-white py-2 rounded-xl font-black text-sm transition-all active:scale-95 shadow-md`}
+                className={`bg-${themeColor}-600 hover:bg-${themeColor}-700 text-white py-2 rounded-xl font-black text-sm transition-all active:scale-95 shadow-md`}
               >
                 +{pts}
               </button>
@@ -1531,19 +1526,19 @@ function PlayerCard({
           <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => onStat(player.id, "REBOUND")}
-              className="bg-orange-500 hover:bg-orange-600 text-white py-1.5 rounded-xl font-black text-[10px] transition-all shadow-sm active:scale-95"
+              className="bg-slate-200 hover:bg-slate-300 text-slate-700 py-1.5 rounded-xl font-black text-[10px] transition-all shadow-sm"
             >
               REB
             </button>
             <button
               onClick={() => onStat(player.id, "ASSIST")}
-              className="bg-sky-500 hover:bg-sky-600 text-white py-1.5 rounded-xl font-black text-[10px] transition-all shadow-sm active:scale-95"
+              className="bg-slate-200 hover:bg-slate-300 text-slate-700 py-1.5 rounded-xl font-black text-[10px] transition-all shadow-sm"
             >
               AST
             </button>
             <button
               onClick={() => onStat(player.id, "STEAL")}
-              className="bg-amber-400 hover:bg-amber-500 text-slate-900 py-1.5 rounded-xl font-black text-[10px] transition-all shadow-sm active:scale-95"
+              className="bg-slate-200 hover:bg-slate-300 text-slate-700 py-1.5 rounded-xl font-black text-[10px] transition-all shadow-sm"
             >
               STL
             </button>
