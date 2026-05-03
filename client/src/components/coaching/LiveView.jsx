@@ -341,6 +341,14 @@ export default function LiveView({
   const nextShortPeriodName =
     quarter >= 4 ? `OT ${quarter - 3}` : `Q${quarter + 1}`;
 
+  // Players who had stints in the previous quarter — used to highlight bench players as "played last Q"
+  const prevQuarterPlayers = useMemo(() => {
+    if (quarter <= 1) return new Set();
+    return new Set(
+      stints.filter((s) => s.quarter === quarter - 1).map((s) => s.playerId),
+    );
+  }, [stints, quarter]);
+
   // 🎨 THE USER INTERFACE (UI): Everything below this line is what the coach sees on the screen.
   return (
     <div className="max-w-6xl mx-auto space-y-4 pb-24 px-2 lg:px-6">
@@ -586,177 +594,159 @@ export default function LiveView({
 
               return (
                 <React.Fragment key={id}>
-                  {/* 🤝 ASSISTED SUB BANNER — only shown here for court-first taps */}
-                  {isSuggestedOut && assistedSuggestion?.type === "court_first" && (
-                    <div className="bg-blue-600 text-white rounded-2xl p-4 shadow-lg border border-blue-500">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <span className="text-[9px] font-black text-blue-200 uppercase tracking-[0.2em]">
-                            Assisted Sub
+                  <div
+                    onClick={() => handleSwap(id)}
+                    className={`p-3 md:p-4 border-2 rounded-2xl transition-all shadow-sm flex flex-col gap-2.5 cursor-pointer ${
+                      isSelected
+                        ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100 scale-[1.01]"
+                        : isSuggestedOut
+                          ? "border-amber-400 bg-amber-50 ring-2 ring-amber-200"
+                          : "bg-white border-slate-100 hover:border-slate-200"
+                    }`}
+                  >
+                    {/* — Row 1: Player Identity — */}
+                    <div className="flex items-center justify-between min-w-0">
+                      <span className="font-black text-slate-800 text-lg md:text-xl truncate">
+                        #{p.jersey} {p.name}
+                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                        {isSuggestedOut && (
+                          <span className="text-[8px] font-black bg-amber-400 text-slate-900 px-2 py-0.5 rounded uppercase tracking-widest">
+                            Sub Out
                           </span>
-                          {assistedSuggestion.type === "bench_first" ? (
-                            <>
-                              <div className="font-black text-base leading-tight mt-0.5 truncate">
-                                #{assistedSuggestion.benchPlayer?.jersey}{" "}
-                                {assistedSuggestion.benchPlayer?.name}{" "}
-                                <span className="text-blue-300">IN</span>
-                              </div>
-                              <div className="text-sm text-blue-100 mt-0.5 truncate">
-                                → Suggested OUT: #{assistedSuggestion.courtPlayer?.jersey}{" "}
-                                {assistedSuggestion.courtPlayer?.name}
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="font-black text-base leading-tight mt-0.5 truncate">
-                                #{assistedSuggestion.courtPlayer?.jersey}{" "}
-                                {assistedSuggestion.courtPlayer?.name}{" "}
-                                <span className="text-blue-300">OUT</span>
-                              </div>
-                              <div className="text-sm text-blue-100 mt-0.5 truncate">
-                                → Suggested IN: #{assistedSuggestion.benchPlayer?.jersey}{" "}
-                                {assistedSuggestion.benchPlayer?.name}
-                              </div>
-                            </>
-                          )}
-                          <div className="text-[10px] font-black text-blue-300 uppercase tracking-wider mt-1">
-                            Why: {assistedSuggestion.reason}
-                          </div>
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSwap(
-                              assistedSuggestion.type === "bench_first"
-                                ? assistedSuggestion.courtId
-                                : assistedSuggestion.benchId,
-                            );
-                          }}
-                          className="min-h-[52px] px-5 bg-white text-blue-600 rounded-xl font-black text-xs uppercase tracking-widest shadow-md hover:bg-blue-50 active:scale-95 transition-all shrink-0"
-                        >
-                          Confirm
-                        </button>
+                        )}
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">
+                          {isSelected ? "Select sub ▸" : "Tap to sub"}
+                        </span>
                       </div>
                     </div>
-                  )}
-                <div
-                  onClick={() => handleSwap(id)}
-                  className={`p-3 md:p-4 border-2 rounded-2xl transition-all shadow-sm flex flex-col gap-2.5 cursor-pointer ${
-                    isSelected
-                      ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100 scale-[1.01]"
-                      : isSuggestedOut
-                        ? "border-amber-400 bg-amber-50 ring-2 ring-amber-200"
-                        : "bg-white border-slate-100 hover:border-slate-200"
-                  }`}
-                >
-                  {/* — Row 1: Player Identity — */}
-                  <div className="flex items-center justify-between min-w-0">
-                    <span className="font-black text-slate-800 text-lg md:text-xl truncate">
-                      #{p.jersey} {p.name}
-                    </span>
-                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                      {isSuggestedOut && (
-                        <span className="text-[8px] font-black bg-amber-400 text-slate-900 px-2 py-0.5 rounded uppercase tracking-widest">
-                          Sub Out
+
+                    {/* — Row 2: Decision Signals — */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-1 bg-slate-900 text-amber-400 px-2 py-1 rounded-lg border border-slate-700">
+                        <span className="text-[11px] font-black tabular-nums">
+                          {stats.score} PTS
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 bg-blue-50 text-blue-600 px-2 py-1 rounded-lg border border-blue-100">
+                        <Clock size={11} className="shrink-0" />
+                        <span className="text-[11px] font-black tabular-nums">
+                          {formatTime(timePlayed)}
+                        </span>
+                      </div>
+                      <div
+                        className={`px-2 py-1 rounded-lg border text-[11px] font-black ${
+                          pm > 0
+                            ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                            : pm < 0
+                              ? "bg-red-50 text-red-600 border-red-100"
+                              : "bg-slate-100 text-slate-500 border-slate-200"
+                        }`}
+                      >
+                        +/- {pm > 0 ? `+${pm}` : pm}
+                      </div>
+                      {streak === "hot" && (
+                        <span
+                          className="text-base animate-bounce"
+                          title="Hot Hand (3+ Scores)"
+                        >
+                          🔥
                         </span>
                       )}
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">
-                        {isSelected ? "Select sub ▸" : "Tap to sub"}
-                      </span>
+                      {streak === "cold" && (
+                        <span
+                          className="text-base animate-pulse"
+                          title="Cold Streak (2+ TOs)"
+                        >
+                          ❄️
+                        </span>
+                      )}
                     </div>
-                  </div>
 
-                  {/* — Row 2: Decision Signals — */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <div className="flex items-center gap-1 bg-slate-900 text-amber-400 px-2 py-1 rounded-lg border border-slate-700">
-                      <span className="text-[11px] font-black tabular-nums">
-                        {stats.score} PTS
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1 bg-blue-50 text-blue-600 px-2 py-1 rounded-lg border border-blue-100">
-                      <Clock size={11} className="shrink-0" />
-                      <span className="text-[11px] font-black tabular-nums">
-                        {formatTime(timePlayed)}
-                      </span>
-                    </div>
+                    {/* — Row 3: Score Buttons — */}
                     <div
-                      className={`px-2 py-1 rounded-lg border text-[11px] font-black ${
-                        pm > 0
-                          ? "bg-emerald-50 text-emerald-600 border-emerald-100"
-                          : pm < 0
-                            ? "bg-red-50 text-red-600 border-red-100"
-                            : "bg-slate-100 text-slate-500 border-slate-200"
-                      }`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="grid grid-cols-3 bg-slate-100 p-1 rounded-xl gap-1"
                     >
-                      +/- {pm > 0 ? `+${pm}` : pm}
+                      {[1, 2, 3].map((val) => (
+                        <button
+                          key={val}
+                          onClick={() => addStat(id, "score", val)}
+                          className="h-12 bg-white rounded-lg font-black text-slate-800 shadow-sm hover:bg-slate-900 hover:text-white transition-all active:scale-95"
+                        >
+                          +{val}
+                        </button>
+                      ))}
                     </div>
-                    {streak === "hot" && (
-                      <span
-                        className="text-base animate-bounce"
-                        title="Hot Hand (3+ Scores)"
-                      >
-                        🔥
-                      </span>
-                    )}
-                    {streak === "cold" && (
-                      <span
-                        className="text-base animate-pulse"
-                        title="Cold Streak (2+ TOs)"
-                      >
-                        ❄️
-                      </span>
-                    )}
-                  </div>
 
-                  {/* — Row 3: Score Buttons — */}
-                  <div
-                    onClick={(e) => e.stopPropagation()}
-                    className="grid grid-cols-3 bg-slate-100 p-1 rounded-xl gap-1"
-                  >
-                    {[1, 2, 3].map((val) => (
+                    {/* — Row 4: TO & Foul — */}
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="grid grid-cols-2 gap-2"
+                    >
                       <button
-                        key={val}
-                        onClick={() => addStat(id, "score", val)}
-                        className="h-12 bg-white rounded-lg font-black text-slate-800 shadow-sm hover:bg-slate-900 hover:text-white transition-all active:scale-95"
+                        onClick={() => addStat(id, "turnovers", 1)}
+                        className="h-11 rounded-xl border-2 flex items-center justify-center gap-2 transition-all active:scale-95 bg-orange-50 border-orange-100 text-orange-600 hover:bg-orange-100"
                       >
-                        +{val}
+                        <span className="text-[10px] font-black uppercase">
+                          TO
+                        </span>
+                        <span className="font-black text-xl leading-none">
+                          {stats.turnovers || 0}
+                        </span>
                       </button>
-                    ))}
+                      <button
+                        onClick={() => addStat(id, "fouls", 1)}
+                        className={`h-11 rounded-xl border-2 flex items-center justify-center gap-2 transition-all active:scale-95 ${
+                          stats.fouls >= 4
+                            ? "bg-red-600 border-red-600 text-white"
+                            : "bg-red-50 border-red-100 text-red-600 hover:bg-red-100"
+                        }`}
+                      >
+                        <span className="text-[10px] font-black uppercase">
+                          Foul
+                        </span>
+                        <span className="font-black text-xl leading-none">
+                          {stats.fouls}
+                        </span>
+                      </button>
+                    </div>
                   </div>
-
-                  {/* — Row 4: TO & Foul — */}
-                  <div
-                    onClick={(e) => e.stopPropagation()}
-                    className="grid grid-cols-2 gap-2"
-                  >
-                    <button
-                      onClick={() => addStat(id, "turnovers", 1)}
-                      className="h-11 rounded-xl border-2 flex items-center justify-center gap-2 transition-all active:scale-95 bg-orange-50 border-orange-100 text-orange-600 hover:bg-orange-100"
-                    >
-                      <span className="text-[10px] font-black uppercase">
-                        TO
-                      </span>
-                      <span className="font-black text-xl leading-none">
-                        {stats.turnovers || 0}
-                      </span>
-                    </button>
-                    <button
-                      onClick={() => addStat(id, "fouls", 1)}
-                      className={`h-11 rounded-xl border-2 flex items-center justify-center gap-2 transition-all active:scale-95 ${
-                        stats.fouls >= 4
-                          ? "bg-red-600 border-red-600 text-white"
-                          : "bg-red-50 border-red-100 text-red-600 hover:bg-red-100"
-                      }`}
-                    >
-                      <span className="text-[10px] font-black uppercase">
-                        Foul
-                      </span>
-                      <span className="font-black text-xl leading-none">
-                        {stats.fouls}
-                      </span>
-                    </button>
-                  </div>
-                </div>
+                  {/* 🤝 ASSISTED SUB BANNER — shown below the tapped court player */}
+                  {isSuggestedOut &&
+                    assistedSuggestion?.type === "court_first" && (
+                      <div className="bg-blue-600 text-white rounded-2xl p-4 shadow-lg border border-blue-500">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <span className="text-[9px] font-black text-blue-200 uppercase tracking-[0.2em]">
+                              Assisted Sub
+                            </span>
+                            <div className="font-black text-base leading-tight mt-0.5 truncate">
+                              #{assistedSuggestion.courtPlayer?.jersey}{" "}
+                              {assistedSuggestion.courtPlayer?.name}{" "}
+                              <span className="text-blue-300">OUT</span>
+                            </div>
+                            <div className="text-sm text-blue-100 mt-0.5 truncate">
+                              → Suggested IN: #
+                              {assistedSuggestion.benchPlayer?.jersey}{" "}
+                              {assistedSuggestion.benchPlayer?.name}
+                            </div>
+                            <div className="text-[10px] font-black text-blue-300 uppercase tracking-wider mt-1">
+                              Why: {assistedSuggestion.reason}
+                            </div>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSwap(assistedSuggestion.benchId);
+                            }}
+                            className="min-h-[52px] px-5 bg-white text-blue-600 rounded-xl font-black text-xs uppercase tracking-widest shadow-md hover:bg-blue-50 active:scale-95 transition-all shrink-0"
+                          >
+                            Confirm
+                          </button>
+                        </div>
+                      </div>
+                    )}
                 </React.Fragment>
               );
             })}
@@ -783,6 +773,7 @@ export default function LiveView({
                   const isSuggestedIn =
                     assistedSuggestion?.type === "court_first" &&
                     assistedSuggestion?.benchId === p.id;
+                  const playedLastQuarter = prevQuarterPlayers.has(p.id);
                   const stats = playerStats[p.id] || {
                     score: 0,
                     fouls: 0,
@@ -798,7 +789,99 @@ export default function LiveView({
                     assistedSuggestion?.benchId === p.id;
                   return (
                     <React.Fragment key={p.id}>
-                      {/* 🤝 ASSISTED SUB BANNER — inline above the tapped bench player */}
+                      <button
+                        onClick={() => handleSwap(p.id)}
+                        disabled={isFouledOut}
+                        className={`p-3 rounded-xl border-2 text-left transition-all active:scale-95 ${
+                          isFouledOut
+                            ? "bg-red-50 border-red-200 opacity-50 grayscale cursor-not-allowed"
+                            : isSuggestedIn
+                              ? "border-emerald-400 bg-emerald-50 ring-2 ring-emerald-200 shadow-md"
+                              : isSelected
+                                ? "border-blue-500 bg-blue-50 shadow-md"
+                                : playedLastQuarter
+                                  ? "bg-amber-50 border-amber-300 ring-1 ring-amber-200"
+                                  : "bg-white border-slate-100 hover:border-blue-300"
+                        }`}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div className="flex flex-col items-start">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-black text-slate-800 text-sm truncate">
+                                #{p.jersey} {p.name}
+                              </span>
+                              {isSuggestedIn && (
+                                <span className="text-[8px] font-black bg-emerald-400 text-slate-900 px-1.5 py-0.5 rounded uppercase tracking-widest shrink-0">
+                                  Sub In
+                                </span>
+                              )}
+                              {playedLastQuarter &&
+                                !isSuggestedIn &&
+                                !isFouledOut && (
+                                  <span className="text-[8px] font-black bg-amber-400 text-slate-900 px-1.5 py-0.5 rounded uppercase tracking-widest shrink-0">
+                                    Q{quarter - 1}
+                                  </span>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span
+                                className={`text-[10px] font-black uppercase px-1.5 py-0.5 rounded border ${pm > 0 ? "bg-emerald-50 text-emerald-600 border-emerald-100" : pm < 0 ? "bg-red-50 text-red-600 border-red-100" : "bg-slate-100 text-slate-500 border-slate-200"}`}
+                              >
+                                +/- ({pm > 0 ? `+${pm}` : pm})
+                              </span>
+                              {streak === "hot" && (
+                                <span
+                                  className="text-base animate-bounce"
+                                  title="Hot Hand (3+ Scores)"
+                                >
+                                  🔥
+                                </span>
+                              )}
+                              {streak === "cold" && (
+                                <span
+                                  className="text-base animate-pulse"
+                                  title="Cold Streak (2+ TOs)"
+                                >
+                                  ❄️
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {stats.fouls >= 4 && (
+                            <span className="text-[8px] font-black bg-red-100 text-red-600 px-1.5 py-0.5 rounded border border-red-200 uppercase flex items-center gap-1 shadow-sm animate-pulse shrink-0 ml-2">
+                              <ShieldAlert size={10} />{" "}
+                              {stats.fouls >= 5 ? "Fouled Out" : "Foul Trouble"}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-1 mt-2 border-t pt-2 border-slate-100">
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-1 text-[10px] font-bold text-blue-500 uppercase">
+                              <Clock size={10} className="shrink-0" />
+                              <span className="tabular-nums">
+                                {formatTime(timePlayed)}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-500 uppercase">
+                              <span>Rest: {restTime}</span>
+                            </div>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-[10px] font-bold text-slate-500">
+                              PTS: {stats.score}
+                            </span>
+                            <span className="text-[10px] font-bold text-orange-500">
+                              TO: {stats.turnovers || 0}
+                            </span>
+                            <span
+                              className={`text-[10px] font-bold ${stats.fouls >= 4 ? "text-red-600" : "text-slate-500"}`}
+                            >
+                              FLS: {stats.fouls}
+                            </span>
+                          </div>
+                        </div>
+                      </button>
+                      {/* 🤝 ASSISTED SUB BANNER — shown below the tapped bench player */}
                       {isBenchTapped && (
                         <div className="bg-blue-600 text-white rounded-2xl p-4 shadow-lg border border-blue-500">
                           <div className="flex items-center justify-between gap-3">
@@ -812,7 +895,8 @@ export default function LiveView({
                                 <span className="text-blue-300">IN</span>
                               </div>
                               <div className="text-sm text-blue-100 mt-0.5 truncate">
-                                → Suggested OUT: #{assistedSuggestion.courtPlayer?.jersey}{" "}
+                                → Suggested OUT: #
+                                {assistedSuggestion.courtPlayer?.jersey}{" "}
                                 {assistedSuggestion.courtPlayer?.name}
                               </div>
                               <div className="text-[10px] font-black text-blue-300 uppercase tracking-wider mt-1">
@@ -831,89 +915,6 @@ export default function LiveView({
                           </div>
                         </div>
                       )}
-                    <button
-                      onClick={() => handleSwap(p.id)}
-                      disabled={isRunning || isFouledOut}
-                      className={`p-3 rounded-xl border-2 text-left transition-all ${
-                        isFouledOut
-                          ? "bg-red-50 border-red-200 opacity-50 grayscale cursor-not-allowed"
-                          : isSuggestedIn
-                            ? "border-emerald-400 bg-emerald-50 ring-2 ring-emerald-200 shadow-md"
-                            : isSelected
-                              ? "border-blue-500 bg-blue-50 shadow-md"
-                              : "bg-white border-slate-100 hover:border-blue-300"
-                      } ${isRunning && !isFouledOut ? "opacity-40 grayscale" : ""} ${!isRunning && !isFouledOut ? "active:scale-95" : ""}`}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex flex-col items-start">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-black text-slate-800 text-sm truncate">
-                              #{p.jersey} {p.name}
-                            </span>
-                            {isSuggestedIn && (
-                              <span className="text-[8px] font-black bg-emerald-400 text-slate-900 px-1.5 py-0.5 rounded uppercase tracking-widest shrink-0">
-                                Sub In
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span
-                              className={`text-[10px] font-black uppercase px-1.5 py-0.5 rounded border ${pm > 0 ? "bg-emerald-50 text-emerald-600 border-emerald-100" : pm < 0 ? "bg-red-50 text-red-600 border-red-100" : "bg-slate-100 text-slate-500 border-slate-200"}`}
-                            >
-                              +/- ({pm > 0 ? `+${pm}` : pm})
-                            </span>
-                            {streak === "hot" && (
-                              <span
-                                className="text-base animate-bounce"
-                                title="Hot Hand (3+ Scores)"
-                              >
-                                🔥
-                              </span>
-                            )}
-                            {streak === "cold" && (
-                              <span
-                                className="text-base animate-pulse"
-                                title="Cold Streak (2+ TOs)"
-                              >
-                                ❄️
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        {stats.fouls >= 4 && (
-                          <span className="text-[8px] font-black bg-red-100 text-red-600 px-1.5 py-0.5 rounded border border-red-200 uppercase flex items-center gap-1 shadow-sm animate-pulse shrink-0 ml-2">
-                            <ShieldAlert size={10} />{" "}
-                            {stats.fouls >= 5 ? "Fouled Out" : "Foul Trouble"}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex flex-col gap-1 mt-2 border-t pt-2 border-slate-100">
-                        <div className="flex justify-between items-center">
-                          <div className="flex items-center gap-1 text-[10px] font-bold text-blue-500 uppercase">
-                            <Clock size={10} className="shrink-0" />
-                            <span className="tabular-nums">
-                              {formatTime(timePlayed)}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-500 uppercase">
-                            <span>Rest: {restTime}</span>
-                          </div>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-[10px] font-bold text-slate-500">
-                            PTS: {stats.score}
-                          </span>
-                          <span className="text-[10px] font-bold text-orange-500">
-                            TO: {stats.turnovers || 0}
-                          </span>
-                          <span
-                            className={`text-[10px] font-bold ${stats.fouls >= 4 ? "text-red-600" : "text-slate-500"}`}
-                          >
-                            FLS: {stats.fouls}
-                          </span>
-                        </div>
-                      </div>
-                    </button>
                     </React.Fragment>
                   );
                 })}

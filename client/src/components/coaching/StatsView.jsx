@@ -71,7 +71,9 @@ export default function StatsView({
   };
 
   const [lineupSortBy, setLineupSortBy] = useState("eff"); // eff, pts, time, to, fls, pm
-  const [insightQuarter, setInsightQuarter] = useState("all");
+  const [insightQuarter, setInsightQuarter] = useState(() =>
+    !isHistory && quarter ? quarter : "all",
+  );
 
   // --- Calculations ---
   const teamTotalScore =
