@@ -26,8 +26,10 @@ export default function CommitteeDashboardView({
   showNotification,
   availableTeams,
   onGameStart,
+  defaultTab = "setup",
+  onTabChange,
 }) {
-  const [activeTab, setActiveTab] = useState("setup"); // 'setup' or 'history'
+  const [activeTab, setActiveTab] = useState(defaultTab); // 'setup' or 'history'
   const [league, setLeague] = useState("");
   const [season, setSeason] = useState("");
   const [division, setDivision] = useState("");
@@ -146,6 +148,15 @@ export default function CommitteeDashboardView({
       fetchHistory();
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    setActiveTab(defaultTab);
+  }, [defaultTab]);
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    if (onTabChange) onTabChange(tab);
+  };
 
   const fetchHistory = async () => {
     setIsLoadingHistory(true);
@@ -393,7 +404,7 @@ export default function CommitteeDashboardView({
       {/* Tab Navigation */}
       <div className="flex bg-slate-200 p-1 rounded-2xl w-full max-w-sm mx-auto shadow-inner">
         <button
-          onClick={() => setActiveTab("setup")}
+          onClick={() => handleTabChange("setup")}
           className={`flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest transition-all ${
             activeTab === "setup"
               ? "bg-white text-slate-900 shadow-lg"
@@ -403,7 +414,7 @@ export default function CommitteeDashboardView({
           Game Setup
         </button>
         <button
-          onClick={() => setActiveTab("history")}
+          onClick={() => handleTabChange("history")}
           className={`flex-1 py-3 rounded-xl font-black uppercase text-xs tracking-widest transition-all ${
             activeTab === "history"
               ? "bg-white text-slate-900 shadow-lg"

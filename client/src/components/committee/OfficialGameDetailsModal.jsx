@@ -25,6 +25,8 @@ export default function OfficialGameDetailsModal({ isOpen, onClose, data }) {
       playerStats[log.player_id] = {
         id: log.player_id,
         name: log.player_name,
+        jersey: log.jersey,
+        team: log.team_side,
         points: 0,
         rebounds: 0,
         assists: 0,
@@ -43,12 +45,23 @@ export default function OfficialGameDetailsModal({ isOpen, onClose, data }) {
 
   const players = Object.values(playerStats);
 
+  const winningTeam =
+    game.final_score_a > game.final_score_b
+      ? "A"
+      : game.final_score_b > game.final_score_a
+        ? "B"
+        : null;
+
+  const eligiblePlayers = winningTeam
+    ? players.filter((p) => p.team === winningTeam)
+    : players;
+
   let mvp = null,
     dpoy = null,
     playmaker = null;
-  if (players.length > 0) {
+  if (eligiblePlayers.length > 0) {
     // MVP = Highest Efficiency: (PTS + REB + AST + STL - FLS)
-    mvp = [...players].sort(
+    mvp = [...eligiblePlayers].sort(
       (a, b) =>
         b.points +
         b.rebounds +
@@ -59,7 +72,7 @@ export default function OfficialGameDetailsModal({ isOpen, onClose, data }) {
     )[0];
 
     // DPOY = Heavily weighted to Steals and Rebounds
-    const dpoyCandidates = [...players].filter(
+    const dpoyCandidates = [...eligiblePlayers].filter(
       (p) => p.steals + p.rebounds > 0,
     );
     if (dpoyCandidates.length > 0) {
@@ -69,15 +82,59 @@ export default function OfficialGameDetailsModal({ isOpen, onClose, data }) {
     }
 
     // Playmaker = Most Assists
-    const playmakerCandidates = [...players].filter((p) => p.assists > 0);
+    const playmakerCandidates = [...eligiblePlayers].filter(
+      (p) => p.assists > 0,
+    );
     if (playmakerCandidates.length > 0) {
       playmaker = playmakerCandidates.sort((a, b) => b.assists - a.assists)[0];
     }
   }
 
+  // Group players by team for the Boxscore
+  const teamAPlayers = players
+    .filter((p) => p.team === "A")
+    .sort(
+      (a, b) => (parseInt(a.jersey, 10) || 0) - (parseInt(b.jersey, 10) || 0),
+    );
+  const teamBPlayers = players
+    .filter((p) => p.team === "B")
+    .sort(
+      (a, b) => (parseInt(a.jersey, 10) || 0) - (parseInt(b.jersey, 10) || 0),
+    );
+
   return (
-    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-[10000] backdrop-blur-sm print:bg-transparent print:p-0 print:block">
-      <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] print:max-h-none print:shadow-none print:w-full print:block">
+    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-[10000] backdrop-blur-sm print:static print:inset-auto print:bg-transparent print:p-0 print:block">
+      <style type="text/css" media="print">
+        {`
+          @page { size: portrait; margin: 0.5in; }
+          body * {
+            visibility: hidden;
+          }
+          #official-report-modal, #official-report-modal * {
+            visibility: visible;
+          }
+          #official-report-modal {
+            position: relative;
+            left: 0;
+            top: 0;
+            width: 100%;
+          }
+          /* Hide background elements from document flow to prevent extra blank pages */
+          nav, 
+          .max-w-6xl > *:not(.fixed) {
+            display: none !important;
+          }
+          main, html, body { 
+            padding: 0 !important; 
+            margin: 0 !important; 
+            height: auto !important;
+          }
+        `}
+      </style>
+      <div
+        id="official-report-modal"
+        className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] print:max-h-none print:shadow-none print:w-full print:block print:overflow-visible print:rounded-none"
+      >
         {/* Header */}
         <div className="bg-white p-6 flex justify-between items-center border-b border-slate-100 print:border-b-2 print:border-black">
           <div className="flex items-center gap-3">
@@ -87,6 +144,8 @@ export default function OfficialGameDetailsModal({ isOpen, onClose, data }) {
                 Official Game Report
               </h2>
               <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">
+                {game.game_date &&
+                  `${new Date(game.game_date).toLocaleDateString()} • `}
                 {game.league} • Season {game.season} • {game.division} DIVISION
               </p>
             </div>
@@ -99,9 +158,9 @@ export default function OfficialGameDetailsModal({ isOpen, onClose, data }) {
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto custom-scrollbar space-y-8 print:overflow-visible print:p-0 print:py-4">
+        <div className="p-6 overflow-y-auto custom-scrollbar space-y-8 print:space-y-4 print:overflow-visible print:p-0 print:py-2">
           {/* Scoreboard Summary */}
-          <div className="grid grid-cols-3 items-center gap-4 bg-slate-50 p-6 rounded-2xl border border-slate-100">
+          <div className="grid grid-cols-3 items-center gap-4 bg-slate-50 p-6 rounded-2xl border border-slate-100 print:bg-transparent print:border-none print:p-0 print:mb-4">
             <div className="text-center">
               <p className="text-[15px] font-black text-blue-500 uppercase tracking-widest mb-1 truncate">
                 {game.team_a_name}
@@ -132,10 +191,10 @@ export default function OfficialGameDetailsModal({ isOpen, onClose, data }) {
 
           {/* Game Awards Section */}
           {players.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 print:grid-cols-3 print:gap-2">
               {/* MVP */}
               {mvp && (
-                <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 p-4 rounded-2xl flex items-center gap-4">
+                <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 p-4 rounded-2xl flex items-center gap-4 print:border-slate-300 print:bg-transparent">
                   <div className="bg-amber-100 p-3 rounded-xl text-amber-600">
                     <Trophy size={24} />
                   </div>
@@ -143,8 +202,13 @@ export default function OfficialGameDetailsModal({ isOpen, onClose, data }) {
                     <p className="text-[10px] font-black uppercase text-amber-600 tracking-widest">
                       Player of the Game
                     </p>
-                    <p className="font-black text-slate-800 leading-tight">
+                    <p className="font-black text-slate-800 leading-tight flex items-center gap-1 flex-wrap">
                       {mvp.name}
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                        (
+                        {mvp.team === "A" ? game.team_a_name : game.team_b_name}
+                        )
+                      </span>
                     </p>
                     <p className="text-[10px] font-bold text-slate-500 uppercase mt-0.5">
                       {mvp.points} PTS • {mvp.rebounds} REB • {mvp.assists} AST
@@ -154,7 +218,7 @@ export default function OfficialGameDetailsModal({ isOpen, onClose, data }) {
               )}
               {/* DPOY */}
               {dpoy && (
-                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200 p-4 rounded-2xl flex items-center gap-4">
+                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200 p-4 rounded-2xl flex items-center gap-4 print:border-slate-300 print:bg-transparent">
                   <div className="bg-blue-100 p-3 rounded-xl text-blue-600">
                     <ShieldAlert size={24} />
                   </div>
@@ -162,8 +226,15 @@ export default function OfficialGameDetailsModal({ isOpen, onClose, data }) {
                     <p className="text-[10px] font-black uppercase text-blue-600 tracking-widest">
                       Best Defensive
                     </p>
-                    <p className="font-black text-slate-800 leading-tight">
+                    <p className="font-black text-slate-800 leading-tight flex items-center gap-1 flex-wrap">
                       {dpoy.name}
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                        (
+                        {dpoy.team === "A"
+                          ? game.team_a_name
+                          : game.team_b_name}
+                        )
+                      </span>
                     </p>
                     <p className="text-[10px] font-bold text-slate-500 uppercase mt-0.5">
                       {dpoy.steals} STL • {dpoy.rebounds} REB
@@ -173,7 +244,7 @@ export default function OfficialGameDetailsModal({ isOpen, onClose, data }) {
               )}
               {/* Playmaker */}
               {playmaker && (
-                <div className="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 p-4 rounded-2xl flex items-center gap-4">
+                <div className="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 p-4 rounded-2xl flex items-center gap-4 print:border-slate-300 print:bg-transparent">
                   <div className="bg-purple-100 p-3 rounded-xl text-purple-600">
                     <Star size={24} />
                   </div>
@@ -181,8 +252,15 @@ export default function OfficialGameDetailsModal({ isOpen, onClose, data }) {
                     <p className="text-[10px] font-black uppercase text-purple-600 tracking-widest">
                       Playmaker
                     </p>
-                    <p className="font-black text-slate-800 leading-tight">
+                    <p className="font-black text-slate-800 leading-tight flex items-center gap-1 flex-wrap">
                       {playmaker.name}
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                        (
+                        {playmaker.team === "A"
+                          ? game.team_a_name
+                          : game.team_b_name}
+                        )
+                      </span>
                     </p>
                     <p className="text-[10px] font-bold text-slate-500 uppercase mt-0.5">
                       {playmaker.assists} AST
@@ -193,126 +271,136 @@ export default function OfficialGameDetailsModal({ isOpen, onClose, data }) {
             </div>
           )}
 
-          {/* Full Play-by-Play Log */}
-          <div className="bg-white rounded-2xl p-4 border border-slate-100 flex flex-col gap-3 shadow-sm">
-            <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-widest flex items-center gap-2">
-              <History size={14} className="text-amber-500" /> Official
-              Play-by-Play
-            </h3>
-            <div className="space-y-1.5 max-h-96 overflow-y-auto pr-2 custom-scrollbar print:max-h-none print:overflow-visible">
-              {logs.length === 0 ? (
-                <p className="text-[10px] text-slate-400 italic text-center py-10 font-bold uppercase tracking-widest">
-                  No events recorded
-                </p>
-              ) : (
-                logs.map((log, idx) => {
-                  const isScore =
-                    log.action_type === "SCORE" ||
-                    log.action_type === "SCORE_ADJUST";
-                  const isFoul = log.action_type === "FOUL";
-                  const isTimeout = log.action_type === "TIMEOUT";
-                  const isSub =
-                    log.action_type === "SUB_IN" ||
-                    log.action_type === "SUB_OUT";
-                  const isStat =
-                    log.action_type === "REBOUND" ||
-                    log.action_type === "ASSIST" ||
-                    log.action_type === "STEAL";
+          {/* Team Boxscores */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 print:grid print:grid-cols-2 print:gap-4 print:space-y-0">
+            {/* Team A Boxscore */}
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col print:break-inside-avoid print:border-slate-300">
+              <div className="bg-blue-50 px-4 py-3 border-b border-blue-100">
+                <h3 className="font-black text-blue-800 uppercase tracking-widest text-sm flex items-center gap-2">
+                  {game.team_a_name} Boxscore
+                </h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[300px] print:text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-[10px] uppercase tracking-widest">
+                      <th className="p-3 font-black">Player</th>
+                      <th className="p-3 font-black text-center">PTS</th>
+                      <th className="p-3 font-black text-center">REB</th>
+                      <th className="p-3 font-black text-center">AST</th>
+                      <th className="p-3 font-black text-center">STL</th>
+                      <th className="p-3 font-black text-center">FLS</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {teamAPlayers.map((p) => (
+                      <tr
+                        key={p.id}
+                        className="hover:bg-slate-50 print:border-b print:border-slate-200 print:break-inside-avoid"
+                      >
+                        <td className="p-3 flex items-center gap-2">
+                          <span className="text-xs font-black text-slate-400 w-5">
+                            #{p.jersey}
+                          </span>
+                          <span className="font-bold text-slate-700 text-xs sm:text-sm uppercase">
+                            {p.name}
+                          </span>
+                        </td>
+                        <td className="p-3 text-center font-black text-slate-800">
+                          {p.points}
+                        </td>
+                        <td className="p-3 text-center font-bold text-slate-600">
+                          {p.rebounds}
+                        </td>
+                        <td className="p-3 text-center font-bold text-slate-600">
+                          {p.assists}
+                        </td>
+                        <td className="p-3 text-center font-bold text-slate-600">
+                          {p.steals}
+                        </td>
+                        <td className="p-3 text-center font-bold text-slate-600">
+                          {p.fouls}
+                        </td>
+                      </tr>
+                    ))}
+                    {teamAPlayers.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan="6"
+                          className="p-4 text-center text-xs text-slate-400 font-bold italic"
+                        >
+                          No player stats recorded.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
 
-                  return (
-                    <div
-                      key={log.id || idx}
-                      className={`flex items-center justify-between p-2 rounded-xl border transition-all ${
-                        isScore
-                          ? "bg-emerald-50 border-emerald-100"
-                          : isFoul
-                            ? "bg-red-50 border-red-100"
-                            : isTimeout
-                              ? "bg-amber-50 border-amber-100"
-                              : isSub
-                                ? "bg-indigo-50 border-indigo-100"
-                                : isStat
-                                  ? "bg-cyan-50 border-cyan-100"
-                                  : "bg-slate-50 border-slate-100"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-[8px] font-black bg-white text-slate-600 w-5 h-5 rounded-full flex items-center justify-center border border-slate-200 shadow-sm">
-                          {log.quarter > 4
-                            ? `OT${log.quarter - 4}`
-                            : `Q${log.quarter}`}
-                        </span>
-                        <div className="flex flex-col">
-                          <span
-                            className={`text-[9px] font-black uppercase leading-tight ${log.team_side === "A" ? "text-blue-600" : log.team_side === "B" ? "text-red-600" : "text-slate-500"}`}
-                          >
-                            {log.action_type === "TIMEOUT" ||
-                            log.action_type === "SCORE_ADJUST"
-                              ? `TEAM ${log.team_side === "A" ? game.team_a_name : game.team_b_name}`
-                              : log.action_type === "GAME_START"
-                                ? `TIP-OFF: ${log.team_side === "A" ? game.team_a_name : game.team_b_name}`
-                                : log.action_type === "ARROW_FLIP"
-                                  ? `POSS: ${log.team_side === "A" ? game.team_a_name : game.team_b_name}`
-                                  : log.action_type === "PERIOD_END"
-                                    ? ""
-                                    : log.player_name
-                                      ? `#${log.jersey} ${log.player_name}`
-                                      : "UNKNOWN PLAYER"}
+            {/* Team B Boxscore */}
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col print:break-inside-avoid print:border-slate-300">
+              <div className="bg-red-50 px-4 py-3 border-b border-red-100">
+                <h3 className="font-black text-red-800 uppercase tracking-widest text-sm flex items-center gap-2">
+                  {game.team_b_name} Boxscore
+                </h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[300px] print:text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 text-[10px] uppercase tracking-widest">
+                      <th className="p-3 font-black">Player</th>
+                      <th className="p-3 font-black text-center">PTS</th>
+                      <th className="p-3 font-black text-center">REB</th>
+                      <th className="p-3 font-black text-center">AST</th>
+                      <th className="p-3 font-black text-center">STL</th>
+                      <th className="p-3 font-black text-center">FLS</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {teamBPlayers.map((p) => (
+                      <tr
+                        key={p.id}
+                        className="hover:bg-slate-50 print:border-b print:border-slate-200 print:break-inside-avoid"
+                      >
+                        <td className="p-3 flex items-center gap-2">
+                          <span className="text-xs font-black text-slate-400 w-5">
+                            #{p.jersey}
                           </span>
-                          <span
-                            className={`text-[8px] font-bold uppercase tracking-tighter ${
-                              isScore
-                                ? "text-emerald-600"
-                                : isFoul
-                                  ? "text-red-600"
-                                  : isTimeout
-                                    ? "text-amber-600"
-                                    : isSub
-                                      ? "text-indigo-600"
-                                      : isStat
-                                        ? "text-cyan-600"
-                                        : "text-slate-500"
-                            }`}
-                          >
-                            {log.action_type === "FOUL"
-                              ? "PERSONAL FOUL"
-                              : log.action_type === "TIMEOUT"
-                                ? "TIMEOUT"
-                                : log.action_type === "SCORE"
-                                  ? `+${log.amount} PTS`
-                                  : log.action_type === "REBOUND"
-                                    ? "REBOUND"
-                                    : log.action_type === "ASSIST"
-                                      ? "ASSIST"
-                                      : log.action_type === "STEAL"
-                                        ? "STEAL"
-                                        : log.action_type === "GAME_START"
-                                          ? "JUMP BALL WON"
-                                          : log.action_type === "PERIOD_END"
-                                            ? "PERIOD END"
-                                            : log.action_type === "ARROW_FLIP"
-                                              ? "HELD BALL"
-                                              : log.action_type ===
-                                                  "SCORE_ADJUST"
-                                                ? `${log.amount} SCORE ADJUST`
-                                                : log.action_type === "SUB_IN"
-                                                  ? "IN"
-                                                  : log.action_type ===
-                                                      "SUB_OUT"
-                                                    ? "OUT"
-                                                    : log.action_type}
+                          <span className="font-bold text-slate-700 text-xs sm:text-sm uppercase">
+                            {p.name}
                           </span>
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end">
-                        <span className="text-[9px] font-black text-slate-400 tabular-nums">
-                          {formatTime(log.time_remaining)}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
+                        </td>
+                        <td className="p-3 text-center font-black text-slate-800">
+                          {p.points}
+                        </td>
+                        <td className="p-3 text-center font-bold text-slate-600">
+                          {p.rebounds}
+                        </td>
+                        <td className="p-3 text-center font-bold text-slate-600">
+                          {p.assists}
+                        </td>
+                        <td className="p-3 text-center font-bold text-slate-600">
+                          {p.steals}
+                        </td>
+                        <td className="p-3 text-center font-bold text-slate-600">
+                          {p.fouls}
+                        </td>
+                      </tr>
+                    ))}
+                    {teamBPlayers.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan="6"
+                          className="p-4 text-center text-xs text-slate-400 font-bold italic"
+                        >
+                          No player stats recorded.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>

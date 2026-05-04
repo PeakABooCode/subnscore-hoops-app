@@ -58,6 +58,7 @@ export default function App() {
     const saved = localStorage.getItem("subnscore_view");
     return saved && saved !== "AUTH" ? saved : "DASHBOARD";
   }); // AUTH, DASHBOARD, SETUP, LIVE, STATS, HISTORY
+  const [committeeTab, setCommitteeTab] = useState("setup");
 
   // --- STANDALONE SCOREBOARD CHECK ---
   const urlParams = new URLSearchParams(window.location.search);
@@ -716,6 +717,7 @@ export default function App() {
           setView("SETUP");
         } else if (selectedModule === "COMMITTEE") {
           setCommitteeQuarter(1); // Reset committee quarter on login
+          setCommitteeTab("setup");
           setView("COMMITTEE_DASHBOARD");
         } else {
           setView("DASHBOARD"); // Default to dashboard if no module is selected during rescue
@@ -1802,6 +1804,7 @@ export default function App() {
       setCommitteePossessionArrow(null);
       setCommitteeLogs([]);
       setCommitteeTimeouts({ A: [], B: [] });
+      setCommitteeTab("history");
       setView("COMMITTEE_DASHBOARD");
       return;
     }
@@ -1815,6 +1818,7 @@ export default function App() {
       setCommitteePossessionArrow(null);
       setCommitteeLogs([]);
       setCommitteeTimeouts({ A: [], B: [] });
+      setCommitteeTab("history");
       setView("COMMITTEE_DASHBOARD");
     } catch (err) {
       console.error("Committee Save Error:", err);
@@ -1838,6 +1842,7 @@ export default function App() {
         setCommitteePossessionArrow(null);
         setCommitteeLogs([]);
         setCommitteeTimeouts({ A: [], B: [] });
+        setCommitteeTab("history");
         setView("COMMITTEE_DASHBOARD");
       }
     }
@@ -2210,6 +2215,8 @@ export default function App() {
             user={user}
             showNotification={showNotification}
             availableTeams={availableTeams}
+            defaultTab={committeeTab}
+            onTabChange={setCommitteeTab}
             onGameStart={(data) => {
               // Force reset all committee session-specific states for a fresh start
               const qMins = data.quarterDuration || 10;
@@ -2262,6 +2269,7 @@ export default function App() {
               setCommitteePossessionArrow(null);
               setCommitteeLogs([]);
               setCommitteeTimeouts({ A: [], B: [] });
+              setCommitteeTab("history");
               setView("COMMITTEE_DASHBOARD");
             }}
           />
@@ -2409,7 +2417,20 @@ export default function App() {
         <ConfirmationModal
           isOpen={isDiscardScoresheetConfirmOpen}
           onClose={() => setIsDiscardScoresheetConfirmOpen(false)}
-          onConfirm={() => {
+          onConfirm={async () => {
+            // Remove the abandoned game from the database
+            if (committeeGameData?.gameId) {
+              try {
+                await axios.delete(
+                  `/api/committee/games/${committeeGameData.gameId}`,
+                );
+              } catch (err) {
+                console.error(
+                  "Failed to discard official scoresheet from database:",
+                  err,
+                );
+              }
+            }
             // Clear active game and reset all session states
             setCommitteeGameData(null);
             setCommitteeQuarter(1);
@@ -2418,6 +2439,7 @@ export default function App() {
             setCommitteePossessionArrow(null);
             setCommitteeLogs([]);
             setCommitteeTimeouts({ A: [], B: [] });
+            setCommitteeTab("setup");
             setView("COMMITTEE_DASHBOARD");
             setIsDiscardScoresheetConfirmOpen(false);
             showNotification("Scoresheet discarded.");

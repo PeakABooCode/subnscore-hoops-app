@@ -1354,7 +1354,7 @@ function TeamJerseyGrid({
       </div>
 
       {/* Jersey grid — fills height when nothing selected; scrollable (hidden bar) when a player is selected */}
-      <div className={`flex flex-col p-2 min-h-0 ${selectedPlayerId ? "overflow-y-auto no-scrollbar" : "flex-1"}`}>
+      <div className={`p-2 min-h-0 ${selectedPlayerId ? "overflow-y-auto no-scrollbar" : "flex-1 flex flex-col"}`}>
         <div className={`grid grid-cols-3 gap-1.5 ${selectedPlayerId ? "" : "flex-1 min-h-0"}`}>
           {sorted.map((p) => {
             const ps = playerStats[p.id] || { points: 0, fouls: 0 };
@@ -1383,10 +1383,12 @@ function TeamJerseyGrid({
             );
           })}
         </div>
+      </div>
 
-        {/* Late player add */}
+      {/* Late player — anchored below grid, never inside scrollable area */}
+      <div className="shrink-0 px-2 pb-2">
         {isAddingLate ? (
-          <div className="flex gap-1 mt-2 p-1.5 bg-slate-50 border border-slate-200 rounded-xl shrink-0">
+          <div className="flex gap-1 p-1.5 bg-slate-50 border border-slate-200 rounded-xl">
             <input
               value={lateJersey}
               onChange={(e) => setLateJersey(e.target.value)}
@@ -1429,7 +1431,7 @@ function TeamJerseyGrid({
         ) : (
           <button
             onClick={() => setIsAddingLate(true)}
-            className="w-full mt-2 py-1.5 border border-dashed border-slate-300 rounded-xl text-[9px] font-black text-slate-500 hover:text-slate-700 hover:border-slate-400 hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5 uppercase tracking-widest shrink-0 shadow-sm"
+            className="w-full py-1.5 border border-dashed border-slate-300 rounded-xl text-[9px] font-black text-slate-500 hover:text-slate-700 hover:border-slate-400 hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5 uppercase tracking-widest shadow-sm"
           >
             <UserPlus size={12} /> Late Player
           </button>
