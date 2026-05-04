@@ -14,6 +14,7 @@ import {
   Edit2,
   Search,
   Clock,
+  Activity,
 } from "lucide-react";
 import TeamSelectionModal from "../common/TeamSelectionModal";
 import OfficialGameDetailsModal from "./OfficialGameDetailsModal";
@@ -44,6 +45,9 @@ export default function CommitteeDashboardView({
 
   const [historyGames, setHistoryGames] = useState([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [isLoadingRoster, setIsLoadingRoster] = useState(false);
+  const [isInitializingGame, setIsInitializingGame] = useState(false);
   const [isDeleteGameConfirmOpen, setIsDeleteGameConfirmOpen] = useState(false);
   const [gameToDelete, setGameToDelete] = useState(null);
 
@@ -171,6 +175,7 @@ export default function CommitteeDashboardView({
   };
 
   const handleViewDetails = async (gameId) => {
+    setIsLoadingDetails(true);
     try {
       const res = await axios.get(`/api/committee/games/${gameId}`);
       setSelectedGameDetails(res.data);
@@ -179,6 +184,8 @@ export default function CommitteeDashboardView({
       showNotification(
         err.response?.data?.error || "Failed to load game details.",
       );
+    } finally {
+      setIsLoadingDetails(false);
     }
   };
 
@@ -193,6 +200,7 @@ export default function CommitteeDashboardView({
   };
 
   const handleSelectTeam = async (side, team) => {
+    setIsLoadingRoster(true);
     try {
       const res = await axios.get(
         `/api/coaching/teams/roster/${encodeURIComponent(team.name)}`,
@@ -214,6 +222,8 @@ export default function CommitteeDashboardView({
       showNotification(`Loaded roster for ${team.name}`);
     } catch (err) {
       showNotification("Failed to load team roster.");
+    } finally {
+      setIsLoadingRoster(false);
     }
   };
 
@@ -310,6 +320,7 @@ export default function CommitteeDashboardView({
       return showNotification("Both teams must have at least 5 players.");
     }
 
+    setIsInitializingGame(true);
     try {
       const payload = {
         teamAName: teamA.name,
@@ -340,6 +351,8 @@ export default function CommitteeDashboardView({
     } catch (err) {
       console.error("Initialization error:", err);
       showNotification(err.response?.data?.error || "Failed to start game.");
+    } finally {
+      setIsInitializingGame(false);
     }
   };
 
@@ -488,8 +501,18 @@ export default function CommitteeDashboardView({
             </div>
 
             {isLoadingHistory ? (
-              <div className="py-20 text-center animate-pulse text-slate-400 font-bold uppercase tracking-widest">
-                Loading Records...
+              <div className="py-20 flex flex-col items-center justify-center">
+                <div className="relative mb-4">
+                  <div className="w-16 h-16 bg-amber-500 rounded-full border-4 border-slate-900 shadow-xl animate-bounce flex items-center justify-center overflow-hidden">
+                    <Activity className="text-white opacity-40" size={32} />
+                    <div className="absolute w-full h-0.5 bg-slate-900/10 rotate-45"></div>
+                    <div className="absolute w-full h-0.5 bg-slate-900/10 -rotate-45"></div>
+                  </div>
+                  <div className="w-12 h-1.5 bg-slate-200 rounded-[100%] mx-auto blur-sm animate-pulse"></div>
+                </div>
+                <div className="text-slate-900 font-black uppercase tracking-[0.3em] text-[10px] animate-pulse">
+                  Loading Records...
+                </div>
               </div>
             ) : filteredHistoryGames.length === 0 ? (
               <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-3xl">
@@ -796,13 +819,59 @@ export default function CommitteeDashboardView({
           <div className="flex justify-center pt-4">
             <button
               onClick={initializeGame}
-              className="w-full max-w-md bg-emerald-600 hover:bg-emerald-700 text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] shadow-xl transition-all transform active:scale-[0.98] flex items-center justify-center gap-3 text-lg"
+              disabled={isInitializingGame}
+              className="w-full max-w-md bg-emerald-600 hover:bg-emerald-700 disabled:opacity-70 disabled:cursor-not-allowed text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] shadow-xl transition-all transform active:scale-[0.98] flex items-center justify-center gap-3 text-lg"
             >
-              <PlayCircle size={24} />
-              Initialize Scoresheet
+              {isInitializingGame ? (
+                <>
+                  <div className="w-6 h-6 bg-white/20 rounded-full animate-bounce flex items-center justify-center">
+                    <Activity className="text-white opacity-80" size={14} />
+                  </div>
+                  Initializing...
+                </>
+              ) : (
+                <>
+                  <PlayCircle size={24} />
+                  Initialize Scoresheet
+                </>
+              )}
             </button>
           </div>
         </>
+      )}
+
+      {/* Bouncing ball overlay while loading game report */}
+      {isLoadingDetails && (
+        <div className="fixed inset-0 bg-slate-900/50 flex flex-col items-center justify-center z-[9999] backdrop-blur-sm">
+          <div className="relative mb-4">
+            <div className="w-16 h-16 bg-amber-500 rounded-full border-4 border-slate-900 shadow-xl animate-bounce flex items-center justify-center overflow-hidden">
+              <Activity className="text-white opacity-40" size={32} />
+              <div className="absolute w-full h-0.5 bg-slate-900/10 rotate-45"></div>
+              <div className="absolute w-full h-0.5 bg-slate-900/10 -rotate-45"></div>
+            </div>
+            <div className="w-12 h-1.5 bg-slate-200 rounded-[100%] mx-auto blur-sm animate-pulse"></div>
+          </div>
+          <div className="text-white font-black uppercase tracking-[0.3em] text-[10px] animate-pulse">
+            Loading Game Report...
+          </div>
+        </div>
+      )}
+
+      {/* Bouncing ball overlay while loading team roster */}
+      {isLoadingRoster && (
+        <div className="fixed inset-0 bg-slate-900/50 flex flex-col items-center justify-center z-[9999] backdrop-blur-sm">
+          <div className="relative mb-4">
+            <div className="w-16 h-16 bg-amber-500 rounded-full border-4 border-slate-900 shadow-xl animate-bounce flex items-center justify-center overflow-hidden">
+              <Activity className="text-white opacity-40" size={32} />
+              <div className="absolute w-full h-0.5 bg-slate-900/10 rotate-45"></div>
+              <div className="absolute w-full h-0.5 bg-slate-900/10 -rotate-45"></div>
+            </div>
+            <div className="w-12 h-1.5 bg-slate-200 rounded-[100%] mx-auto blur-sm animate-pulse"></div>
+          </div>
+          <div className="text-white font-black uppercase tracking-[0.3em] text-[10px] animate-pulse">
+            Loading Roster...
+          </div>
+        </div>
       )}
 
       {/* Detail Modal */}
