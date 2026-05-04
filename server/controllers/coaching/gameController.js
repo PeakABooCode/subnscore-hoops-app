@@ -88,7 +88,9 @@ export const saveGameSession = async (req, res) => {
     await pool.query("DELETE FROM substitution_logs    WHERE game_id = $1", [gameId]);
 
     // 4. Map players and insert box-score stats
+    // rosterMap lets steps 5 and 6 snapshot name/jersey without extra DB hits.
     const playerMap = {};
+    const rosterMap = {};
     for (const player of roster) {
       let pResult = await pool.query(
         "SELECT id FROM players WHERE team_id = $1 AND name = $2 AND jersey_number = $3",
@@ -105,44 +107,54 @@ export const saveGameSession = async (req, res) => {
         dbPlayerId = ins.rows[0].id;
       }
       playerMap[player.id] = dbPlayerId;
+      rosterMap[player.id] = { name: player.name, jersey: player.jersey };
 
       const stats = playerStats[player.id] || {};
       await pool.query(
         `INSERT INTO game_stats
-           (game_id, player_id, points, fouls, turnovers, minutes, seconds_played)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [gameId, dbPlayerId, stats.score || 0, stats.fouls || 0,
+           (game_id, player_id, player_name, player_jersey,
+            points, fouls, turnovers, minutes, seconds_played)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [gameId, dbPlayerId, player.name, player.jersey,
+         stats.score || 0, stats.fouls || 0,
          stats.turnovers || 0, player.calculatedMins || "0:00", player.rawSeconds || 0],
       );
     }
 
-    // 5. Quarter stats
+    // 5. Quarter stats — snapshot player identity alongside the stats
     for (const qStat of calculatedQuarterStats) {
+      const pInfo = rosterMap[qStat.playerId] || {};
       await pool.query(
         `INSERT INTO player_quarter_stats
-           (game_id, player_id, quarter, points, fouls, turnovers, seconds_played)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+           (game_id, player_id, player_name, player_jersey,
+            quarter, points, fouls, turnovers, seconds_played)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [gameId, playerMap[qStat.playerId] || null,
+         pInfo.name || null, pInfo.jersey || null,
          qStat.quarter, qStat.points, qStat.fouls, qStat.turnovers, qStat.secondsPlayed],
       );
     }
 
-    // 6. Action logs and substitution logs
+    // 6. Action logs and substitution logs — snapshot player identity in every row
     for (const log of actionHistory) {
       const dbPlayerId = log.playerId ? playerMap[log.playerId] || null : null;
+      const pInfo = log.playerId ? rosterMap[log.playerId] || {} : {};
       await pool.query(
         `INSERT INTO action_logs
-           (game_id, player_id, action_type, amount, quarter, time_remaining)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [gameId, dbPlayerId, log.type, log.amount || 0, log.quarter, log.clock],
+           (game_id, player_id, player_name, player_jersey,
+            action_type, amount, quarter, time_remaining)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [gameId, dbPlayerId, pInfo.name || null, pInfo.jersey || null,
+         log.type, log.amount || 0, log.quarter, log.clock],
       );
       if (log.type === "SUB_IN" || log.type === "SUB_OUT") {
         await pool.query(
           `INSERT INTO substitution_logs
-             (game_id, player_id, quarter, time_remaining, action_type)
-           VALUES ($1, $2, $3, $4, $5)`,
-          [gameId, dbPlayerId, log.quarter, log.clock,
-           log.type === "SUB_IN" ? "IN" : "OUT"],
+             (game_id, player_id, player_name, player_jersey,
+              quarter, time_remaining, action_type)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [gameId, dbPlayerId, pInfo.name || null, pInfo.jersey || null,
+           log.quarter, log.clock, log.type === "SUB_IN" ? "IN" : "OUT"],
         );
       }
     }
@@ -187,10 +199,14 @@ export const getGameDetails = async (req, res) => {
       [id],
     );
 
+    // LEFT JOIN + COALESCE: snapshot columns serve deleted players;
+    // live JOIN serves older records saved before the snapshot columns existed.
     const stats = await pool.query(
-      `SELECT gs.*, p.name, p.jersey_number 
-       FROM game_stats gs 
-       JOIN players p ON gs.player_id = p.id 
+      `SELECT gs.*,
+              COALESCE(gs.player_name, p.name) AS name,
+              COALESCE(gs.player_jersey, p.jersey_number) AS jersey_number
+       FROM game_stats gs
+       LEFT JOIN players p ON gs.player_id = p.id
        WHERE gs.game_id = $1`,
       [id],
     );
