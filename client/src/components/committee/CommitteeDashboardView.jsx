@@ -78,8 +78,15 @@ export default function CommitteeDashboardView({
     [availableTeams],
   );
   const uniqueDivisions = useMemo(
-    () => [...new Set(availableTeams.map((t) => t.division).filter(Boolean))],
-    [availableTeams],
+    () => [
+      ...new Set(
+        availableTeams
+          .filter((t) => !league || t.league === league)
+          .map((t) => t.division)
+          .filter(Boolean),
+      ),
+    ],
+    [availableTeams, league],
   );
   // uniqueSeasons is scoped to whatever league/division is currently selected
   // so the season field only shows seasons relevant to the active context
