@@ -1,2 +1,14 @@
 # .prettierignore
 db-schema.md
+
+# Build artifacts
+dist/
+build/
+coverage/
+
+# Dependencies (Prettier ignores these by default, but listing them is safer)
+node_modules/
+
+# Massive data or auto-generated files
+*.json
+*.min.js

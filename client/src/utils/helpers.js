@@ -25,34 +25,67 @@ export const getFibaTimeoutInfo = (quarter, clock, timeouts) => {
   if (quarter <= 2) {
     const used = timeouts.filter((t) => t.quarter <= 2).length;
     const limit = 2;
-    return { used, limit, remaining: Math.max(0, limit - used), canCallTimeout: used < limit, periodLabel: "1st Half", isLastTwoMin: false };
+    return {
+      used,
+      limit,
+      remaining: Math.max(0, limit - used),
+      canCallTimeout: used < limit,
+      periodLabel: "1st Half",
+      isLastTwoMin: false,
+    };
   }
 
   if (quarter <= 4) {
-    const h2Used = timeouts.filter((t) => t.quarter >= 3 && t.quarter <= 4).length;
+    const h2Used = timeouts.filter(
+      (t) => t.quarter >= 3 && t.quarter <= 4,
+    ).length;
     const h2Limit = 3;
     let canCallTimeout = h2Used < h2Limit;
 
     // Sub-cap: in the last 2 min of Q4, at most 2 TOs may be called in that window
     if (isLastTwoMin) {
-      const lastTwoMinUsed = timeouts.filter((t) => t.quarter === 4 && t.clock <= 120).length;
+      const lastTwoMinUsed = timeouts.filter(
+        (t) => t.quarter === 4 && t.clock <= 120,
+      ).length;
       canCallTimeout = canCallTimeout && lastTwoMinUsed < 2;
     }
 
-    return { used: h2Used, limit: h2Limit, remaining: Math.max(0, h2Limit - h2Used), canCallTimeout, periodLabel: "2nd Half", isLastTwoMin };
+    return {
+      used: h2Used,
+      limit: h2Limit,
+      remaining: Math.max(0, h2Limit - h2Used),
+      canCallTimeout,
+      periodLabel: "2nd Half",
+      isLastTwoMin,
+    };
   }
 
   // OT: 1 TO per OT period, each period is its own independent pool
   const used = timeouts.filter((t) => t.quarter === quarter).length;
   const limit = 1;
-  return { used, limit, remaining: Math.max(0, limit - used), canCallTimeout: used < limit, periodLabel: `OT${quarter - 4}`, isLastTwoMin: false };
+  return {
+    used,
+    limit,
+    remaining: Math.max(0, limit - used),
+    canCallTimeout: used < limit,
+    periodLabel: `OT${quarter - 4}`,
+    isLastTwoMin: false,
+  };
 };
 
 export const DEFAULT_COMMITTEE_KEYBINDINGS = {
-  toggleGameClock: "Space",
-  resetShotClock24: "KeyR",
-  resetShotClock14: "KeyF",
-  soundHorn: "KeyH",
+  toggleGameClock: "KeyQ",
+  toggleShotClock: "Space",
+  resetShotClock24: "KeyW",
+  resetShotClock14: "KeyE",
+  //soundHorn: "KeyH",
+  addPoint1: "Digit1",
+  addPoint2: "Digit2",
+  addPoint3: "Digit3",
+  addFoul: "KeyF",
+  addRebound: "KeyR",
+  addAssist: "KeyA",
+  addSteal: "KeyS",
 };
 
 export const formatTime = (totalSeconds) => {
@@ -282,5 +315,7 @@ export const calculateLineupStats = (
   // Pseudo-code: convert each lineup's quarters Set → sorted array before returning
   return Object.values(lineupStats)
     .map((l) => ({ ...l, quarters: [...l.quarters].sort((a, b) => a - b) }))
-    .sort((a, b) => b.totalTime - a.totalTime || b.pointsScored - a.pointsScored);
+    .sort(
+      (a, b) => b.totalTime - a.totalTime || b.pointsScored - a.pointsScored,
+    );
 };

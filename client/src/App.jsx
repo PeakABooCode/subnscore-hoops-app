@@ -262,9 +262,19 @@ export default function App() {
   const [committeeKeybindings, setCommitteeKeybindings] = useState(() => {
     try {
       const saved = localStorage.getItem("subnscore_committeeKeybindings");
-      return saved
-        ? { ...DEFAULT_COMMITTEE_KEYBINDINGS, ...JSON.parse(saved) }
-        : DEFAULT_COMMITTEE_KEYBINDINGS;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const merged = { ...DEFAULT_COMMITTEE_KEYBINDINGS, ...parsed };
+
+        // Prevent collision bugs: If the user's old cache still maps Game Clock to Space
+        // or any other duplicate keys exist, safely reset to the new unique defaults.
+        const values = Object.values(merged);
+        const hasDuplicates = new Set(values).size !== values.length;
+        if (hasDuplicates) return DEFAULT_COMMITTEE_KEYBINDINGS;
+
+        return merged;
+      }
+      return DEFAULT_COMMITTEE_KEYBINDINGS;
     } catch {
       return DEFAULT_COMMITTEE_KEYBINDINGS;
     }
@@ -2151,9 +2161,9 @@ export default function App() {
       )}
 
       <main
-        className={`flex-1 p-4 md:p-8 ${
-          view === "COMMITTEE_LIVE" ? "md:pt-4 pt-4" : ""
-        } max-w-7xl mx-auto w-full`}
+        className={`flex-1 w-full max-w-7xl mx-auto ${
+          view === "COMMITTEE_LIVE" ? "p-2" : "p-4 md:p-8"
+        }`}
       >
         {!user && view === "AUTH" && (
           <AuthView
@@ -2300,9 +2310,15 @@ export default function App() {
             teamFouls={teamFouls}
             timeouts={timeouts}
             addTimeout={() => {
-              const fibaTO = getFibaTimeoutInfo(coachingQuarter, coachingClock, timeouts);
+              const fibaTO = getFibaTimeoutInfo(
+                coachingQuarter,
+                coachingClock,
+                timeouts,
+              );
               if (!fibaTO.canCallTimeout) {
-                showNotification(`No timeouts left — ${fibaTO.periodLabel} limit reached`);
+                showNotification(
+                  `No timeouts left — ${fibaTO.periodLabel} limit reached`,
+                );
                 return;
               }
               setTimeouts([

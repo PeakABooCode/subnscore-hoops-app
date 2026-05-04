@@ -3,9 +3,16 @@ import { X, Keyboard, Save } from "lucide-react";
 
 const keyDisplayMap = {
   Space: "Spacebar",
-  KeyR: "R",
+  KeyQ: "Q",
+  KeyW: "W",
+  KeyE: "E",
+  Digit1: "1",
+  Digit2: "2",
+  Digit3: "3",
   KeyF: "F",
-  KeyH: "H",
+  KeyR: "R",
+  KeyA: "A",
+  KeyS: "S",
   // Add more mappings for better display if needed
 };
 
@@ -82,7 +89,7 @@ export default function KeyboardSettingsModal({
           </button>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-3 max-h-[50vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] p-1">
           {Object.entries(tempKeybindings).map(([action, key]) => (
             <div
               key={action}

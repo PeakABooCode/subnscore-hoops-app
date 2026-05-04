@@ -16,8 +16,7 @@ import {
   ShieldAlert,
   Trophy,
   ChevronLeft,
-  ChevronDown,
-  ChevronUp,
+  X,
   Monitor,
   Play,
   Pause,
@@ -26,6 +25,9 @@ import {
   BellRing,
   UserPlus,
   Trash2,
+  ChevronUp,
+  ChevronDown,
+  ClipboardPaste,
 } from "lucide-react";
 import { formatTime, getFibaTimeoutInfo } from "../../utils/helpers";
 import KeyboardSettingsModal from "./KeyboardSettingsModal";
@@ -59,6 +61,45 @@ export default function CommitteeLiveView({
   const syncTimeoutRef = useRef(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isEditClockOpen, setIsEditClockOpen] = useState(false);
+  const [isLogOpen, setIsLogOpen] = useState(false); // Bottom collapsing log state
+
+  const [isAdvanceQuarterConfirmOpen, setIsAdvanceQuarterConfirmOpen] =
+    useState(false);
+  const [isSaveGameConfirmOpen, setIsSaveGameConfirmOpen] = useState(false);
+  const [shotClock, setShotClock] = useState(24);
+  const [shotClockPulse, setShotClockPulse] = useState(false);
+  const [isShotClockPaused, setIsShotClockPaused] = useState(false);
+  const [selectedPlayerA, setSelectedPlayerA] = useState(null); // tapped jersey in Team A grid
+  const [selectedPlayerB, setSelectedPlayerB] = useState(null); // tapped jersey in Team B grid
+
+  // --- Late Arrivals State ---
+  const [latePlayersA, setLatePlayersA] = useState([]);
+  const [latePlayersB, setLatePlayersB] = useState([]);
+
+  // State refs to use inside the keyboard listener
+  const stateRef = useRef({ selectedPlayerA, selectedPlayerB });
+  useEffect(() => {
+    stateRef.current = { selectedPlayerA, selectedPlayerB };
+  });
+
+  const handlersRef = useRef({
+    handleScore: null,
+    handleStat: null,
+    handleFoul: null,
+    triggerShotClockPulse: null,
+    playHorn: null,
+    toggleShotClock: null,
+  });
+  useEffect(() => {
+    handlersRef.current = {
+      handleScore,
+      handleStat,
+      handleFoul,
+      triggerShotClockPulse,
+      playHorn,
+      toggleShotClock: () => setIsShotClockPaused((prev) => !prev),
+    };
+  });
 
   // Pseudo-code: parse MM:SS or raw seconds from the edit modal, clamp to ≥ 0
   const handleSaveClock = (val) => {
@@ -74,21 +115,6 @@ export default function CommitteeLiveView({
     }
     if (newSeconds >= 0) setClock(newSeconds);
   };
-  const [isAdvanceQuarterConfirmOpen, setIsAdvanceQuarterConfirmOpen] =
-    useState(false);
-  const [isSaveGameConfirmOpen, setIsSaveGameConfirmOpen] = useState(false);
-  const [shotClock, setShotClock] = useState(24);
-  const [shotClockPulse, setShotClockPulse] = useState(false);
-  const [teamAOnCourt, setTeamAOnCourt] = useState([]);
-  const [teamABench, setTeamABench] = useState([]);
-  const [teamBOnCourt, setTeamBOnCourt] = useState([]);
-  const [teamBBench, setTeamBBench] = useState([]);
-  const [selectedPlayersA, setSelectedPlayersA] = useState([]); // Players selected for swap on Team A
-  const [selectedPlayersB, setSelectedPlayersB] = useState([]); // Players selected for swap on Team B
-
-  // --- Late Arrivals State ---
-  const [latePlayersA, setLatePlayersA] = useState([]);
-  const [latePlayersB, setLatePlayersB] = useState([]);
 
   const periodName =
     quarter > 4 ? `Overtime ${quarter - 4}` : `Period ${quarter}`;
@@ -153,35 +179,6 @@ export default function CommitteeLiveView({
     return stats;
   }, [logs, initialData, latePlayersA, latePlayersB]);
 
-  // Initialize lineups — use pre-selected starting 5 if provided, else fall back to jersey sort
-  useEffect(() => {
-    const sortByJersey = (roster) =>
-      [...roster].sort(
-        (a, b) => (parseInt(a.jersey, 10) || 0) - (parseInt(b.jersey, 10) || 0),
-      );
-
-    const sortedA = sortByJersey(initialData.teamARoster);
-    const sortedB = sortByJersey(initialData.teamBRoster);
-    const startA = initialData.startingFiveA || [];
-    const startB = initialData.startingFiveB || [];
-
-    if (startA.length === 5) {
-      setTeamAOnCourt(initialData.teamARoster.filter((p) => startA.includes(p.id)));
-      setTeamABench(initialData.teamARoster.filter((p) => !startA.includes(p.id)));
-    } else {
-      setTeamAOnCourt(sortedA.slice(0, 5));
-      setTeamABench(sortedA.slice(5));
-    }
-
-    if (startB.length === 5) {
-      setTeamBOnCourt(initialData.teamBRoster.filter((p) => startB.includes(p.id)));
-      setTeamBBench(initialData.teamBRoster.filter((p) => !startB.includes(p.id)));
-    } else {
-      setTeamBOnCourt(sortedB.slice(0, 5));
-      setTeamBBench(sortedB.slice(5));
-    }
-  }, [initialData]);
-
   // --- AUDIO BUZZER LOGIC ---
   useEffect(() => {
     buzzerRef.current = new Audio("/sounds/buzzer.mp3"); // Make sure you have a buzzer.mp3 in your public/sounds folder
@@ -231,7 +228,7 @@ export default function CommitteeLiveView({
   // --- SHOT CLOCK TIMER LOGIC ---
   useEffect(() => {
     let interval;
-    if (isRunning) {
+    if (isRunning && !isShotClockPaused) {
       interval = setInterval(() => {
         setShotClock((prev) => {
           if (prev <= 0) return 0;
@@ -241,12 +238,27 @@ export default function CommitteeLiveView({
       }, 100); // Tick every 100ms
     }
     return () => clearInterval(interval);
-  }, [isRunning]);
+  }, [isRunning, isShotClockPaused]);
 
   const triggerShotClockPulse = (value) => {
     setShotClock(value);
     setShotClockPulse(true);
+    setIsShotClockPaused(!isRunning); // Resume if game clock is running, stay paused if stopped
     setTimeout(() => setShotClockPulse(false), 400);
+  };
+
+  // Auto-pause shot clock when game clock stops
+  useEffect(() => {
+    if (!isRunning) {
+      setIsShotClockPaused(true);
+    }
+  }, [isRunning]);
+
+  // Helper for tooltips
+  const formatKey = (code) => {
+    if (!code) return "";
+    if (code === "Space") return "Spacebar";
+    return code.replace("Key", "").replace("Digit", "");
   };
 
   // --- KEYBOARD SHORTCUTS ---
@@ -258,31 +270,93 @@ export default function CommitteeLiveView({
         return;
       }
 
-      const { toggleGameClock, resetShotClock24, resetShotClock14, soundHorn } =
-        committeeKeybindings;
+      const {
+        toggleGameClock,
+        toggleShotClock,
+        resetShotClock24,
+        resetShotClock14,
+        soundHorn,
+        addPoint1,
+        addPoint2,
+        addPoint3,
+        addFoul,
+        addRebound,
+        addAssist,
+        addSteal,
+      } = committeeKeybindings;
+
       if (
         [
           toggleGameClock,
+          toggleShotClock,
           resetShotClock24,
           resetShotClock14,
           soundHorn,
+          addPoint1,
+          addPoint2,
+          addPoint3,
+          addFoul,
+          addRebound,
+          addAssist,
+          addSteal,
         ].includes(event.code)
       ) {
         event.preventDefault();
       }
 
+      const { selectedPlayerA: spA, selectedPlayerB: spB } = stateRef.current;
+      const {
+        handleScore: hScore,
+        handleStat: hStat,
+        handleFoul: hFoul,
+        triggerShotClockPulse: tShotClock,
+        playHorn: pHorn,
+        toggleShotClock: tShotClockPause,
+      } = handlersRef.current;
+
       switch (event.code) {
         case toggleGameClock:
           setIsRunning((prev) => !prev); // Toggle game clock
           break;
+        case toggleShotClock:
+          tShotClockPause();
+          break;
         case resetShotClock24: // 'R' key for Reset 24s
-          triggerShotClockPulse(24);
+          tShotClock(24);
           break;
         case resetShotClock14: // 'F' key for Reset 14s
-          triggerShotClockPulse(14);
+          tShotClock(14);
           break;
         case soundHorn: // 'H' key for manual Horn
-          playHorn();
+          pHorn();
+          break;
+        case addPoint1:
+          if (spA) hScore("A", spA, 1);
+          if (spB) hScore("B", spB, 1);
+          break;
+        case addPoint2:
+          if (spA) hScore("A", spA, 2);
+          if (spB) hScore("B", spB, 2);
+          break;
+        case addPoint3:
+          if (spA) hScore("A", spA, 3);
+          if (spB) hScore("B", spB, 3);
+          break;
+        case addFoul:
+          if (spA) hFoul("A", spA);
+          if (spB) hFoul("B", spB);
+          break;
+        case addRebound:
+          if (spA) hStat("A", spA, "REBOUND");
+          if (spB) hStat("B", spB, "REBOUND");
+          break;
+        case addAssist:
+          if (spA) hStat("A", spA, "ASSIST");
+          if (spB) hStat("B", spB, "ASSIST");
+          break;
+        case addSteal:
+          if (spA) hStat("A", spA, "STEAL");
+          if (spB) hStat("B", spB, "STEAL");
           break;
         default:
           break;
@@ -372,122 +446,19 @@ export default function CommitteeLiveView({
   const handleAddLatePlayer = (teamSide, player) => {
     const id = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
     const newP = { ...player, id, dbId: null };
-
-    if (teamSide === "A") {
-      setLatePlayersA((prev) => [...prev, newP]);
-      setTeamABench((prev) => [...prev, newP]);
-    } else {
-      setLatePlayersB((prev) => [...prev, newP]);
-      setTeamBBench((prev) => [...prev, newP]);
-    }
-
+    if (teamSide === "A") setLatePlayersA((prev) => [...prev, newP]);
+    else setLatePlayersB((prev) => [...prev, newP]);
     addLog({
       type: "SUB_IN",
       team: teamSide,
       playerId: id,
-      dbPlayerId: null, // explicit null to prompt the backend to create this player
+      dbPlayerId: null,
       playerName: newP.name,
       jersey: newP.jersey,
       quarter,
       clock,
     });
-    showNotification(
-      `Added late player ${newP.name} to Team ${teamSide} bench.`,
-    );
-  };
-
-  const handlePlayerSelection = (teamSide, playerId) => {
-    const onCourt = teamSide === "A" ? teamAOnCourt : teamBOnCourt;
-    const bench = teamSide === "A" ? teamABench : teamBBench;
-    const pStats = playerStats[playerId];
-    const isOnCourt = onCourt.some((p) => p.id === playerId);
-
-    // Prevent fouled out players from subbing in
-    if (!isOnCourt && pStats && pStats.fouls >= 5) {
-      showNotification("Cannot sub in a player who has fouled out.");
-      return;
-    }
-
-    const setSelected =
-      teamSide === "A" ? setSelectedPlayersA : setSelectedPlayersB;
-    const selectedPlayers =
-      teamSide === "A" ? selectedPlayersA : selectedPlayersB;
-    const isSelected = selectedPlayers.includes(playerId);
-
-    // Enforce max 5 selections per zone
-    if (!isSelected) {
-      const currentOnCourtSelected = selectedPlayers.filter((id) =>
-        onCourt.some((p) => p.id === id),
-      );
-      const currentOnBenchSelected = selectedPlayers.filter((id) =>
-        bench.some((p) => p.id === id),
-      );
-
-      if (isOnCourt && currentOnCourtSelected.length >= 5) {
-        showNotification("Already selected 5 players from the court.");
-        return;
-      }
-      if (!isOnCourt && currentOnBenchSelected.length >= 5) {
-        showNotification("Already selected 5 players from the bench.");
-        return;
-      }
-    }
-
-    let nextSelected = isSelected
-      ? selectedPlayers.filter((id) => id !== playerId)
-      : [...selectedPlayers, playerId];
-
-    // Automated Swap Logic: If count of selected On-Court matches Bench, swap immediately
-    const nextOut = onCourt.filter((p) => nextSelected.includes(p.id));
-    const nextIn = bench.filter((p) => nextSelected.includes(p.id));
-
-    if (nextOut.length > 0 && nextOut.length === nextIn.length) {
-      const setOnCourt = teamSide === "A" ? setTeamAOnCourt : setTeamBOnCourt;
-      const setBench = teamSide === "A" ? setTeamABench : setTeamBBench;
-
-      const newOnCourt = onCourt
-        .filter((p) => !nextSelected.includes(p.id))
-        .concat(nextIn);
-      const newBench = bench
-        .filter((p) => !nextSelected.includes(p.id))
-        .concat(nextOut);
-
-      setOnCourt(newOnCourt);
-      setBench(newBench);
-      setSelected([]);
-
-      nextOut.forEach((p) =>
-        addLog({
-          type: "SUB_OUT",
-          team: teamSide,
-          playerId: p.id,
-          dbPlayerId:
-            (teamSide === "A" ? teamAPlayerMap : teamBPlayerMap)[p.id] || null,
-          playerName: p.name,
-          jersey: p.jersey,
-          quarter,
-          clock,
-        }),
-      );
-      nextIn.forEach((p) =>
-        addLog({
-          type: "SUB_IN",
-          team: teamSide,
-          playerId: p.id,
-          dbPlayerId:
-            (teamSide === "A" ? teamAPlayerMap : teamBPlayerMap)[p.id] || null,
-          playerName: p.name,
-          jersey: p.jersey,
-          quarter,
-          clock,
-        }),
-      );
-
-      showNotification(`Substitution completed for Team ${teamSide}`);
-      setIsRunning(false);
-    } else {
-      setSelected(nextSelected);
-    }
+    showNotification(`Added late player ${newP.name} to Team ${teamSide}.`);
   };
 
   // --- Handlers ---
@@ -503,6 +474,10 @@ export default function CommitteeLiveView({
 
   const handleScore = (team, playerId, amount) => {
     const player = findPlayer(playerId);
+    showNotification(
+      `+${amount} PTS added to #${player.jersey} ${player.name}`,
+    );
+
     addLog({
       type: "SCORE",
       team,
@@ -515,10 +490,14 @@ export default function CommitteeLiveView({
       quarter,
       clock,
     });
+    setSelectedPlayerA(null);
+    setSelectedPlayerB(null);
   };
 
   const handleStat = (team, playerId, type) => {
     const player = findPlayer(playerId);
+    showNotification(`${type} added to #${player.jersey} ${player.name}`);
+
     addLog({
       type,
       team,
@@ -531,15 +510,19 @@ export default function CommitteeLiveView({
       quarter,
       clock,
     });
+    setSelectedPlayerA(null);
+    setSelectedPlayerB(null);
   };
 
   const handleFoul = (team, playerId) => {
     const player = findPlayer(playerId);
     const currentFls = playerStats[playerId]?.fouls || 0;
 
-    if (currentFls + 1 >= 5) showNotification(`${player.name} has FOULED OUT!`);
-    if (teamFouls[team] + 1 === 5)
-      showNotification(`TEAM ${team} IS NOW IN PENALTY!`);
+    let msg = `FOUL added to #${player.jersey} ${player.name}`;
+    if (currentFls + 1 >= 5) msg += ` (FOULED OUT!)`;
+    if (teamFouls[team] + 1 === 5) msg += ` (TEAM PENALTY!)`;
+
+    showNotification(msg);
 
     addLog({
       type: "FOUL",
@@ -552,13 +535,18 @@ export default function CommitteeLiveView({
       quarter,
       clock,
     });
+    setSelectedPlayerA(null);
+    setSelectedPlayerB(null);
   };
 
   const handleTimeout = (team) => {
     const fibaTO = getTeamFibaTO(team);
     if (!fibaTO.canCallTimeout) {
-      const teamName = team === "A" ? initialData.teamAName : initialData.teamBName;
-      const reason = fibaTO.isLastTwoMin ? "last 2-min cap reached" : `${fibaTO.periodLabel} limit reached`;
+      const teamName =
+        team === "A" ? initialData.teamAName : initialData.teamBName;
+      const reason = fibaTO.isLastTwoMin
+        ? "last 2-min cap reached"
+        : `${fibaTO.periodLabel} limit reached`;
       showNotification(`No timeouts remaining for ${teamName} — ${reason}.`);
       return;
     }
@@ -601,7 +589,9 @@ export default function CommitteeLiveView({
         if (onGameSaved) onGameSaved();
       } catch (err) {
         console.error("Save Error:", err);
-        showNotification(err.response?.data?.error || "Failed to save official game.");
+        showNotification(
+          err.response?.data?.error || "Failed to save official game.",
+        );
       }
     }
   };
@@ -638,7 +628,9 @@ export default function CommitteeLiveView({
       quarter: 1,
       clock: quarterSeconds,
     });
-    showNotification(`Tip-off won by ${winner === "A" ? initialData.teamAName : initialData.teamBName} — clock started`);
+    showNotification(
+      `Tip-off won by ${winner === "A" ? initialData.teamAName : initialData.teamBName} — clock started`,
+    );
   };
 
   const advanceQuarter = () => {
@@ -702,204 +694,114 @@ export default function CommitteeLiveView({
     }
 
     setLogs((prev) => prev.slice(1));
-    showNotification("Last action undone.");
+
+    let msg = "Last action undone.";
+    if (lastAction.type === "SCORE") {
+      msg = `Undid: +${lastAction.amount} PTS for #${lastAction.jersey} ${lastAction.playerName}`;
+    } else if (lastAction.type === "FOUL") {
+      msg = `Undid: FOUL on #${lastAction.jersey} ${lastAction.playerName}`;
+    } else if (
+      lastAction.type === "REBOUND" ||
+      lastAction.type === "ASSIST" ||
+      lastAction.type === "STEAL"
+    ) {
+      msg = `Undid: ${lastAction.type} for #${lastAction.jersey} ${lastAction.playerName}`;
+    } else if (lastAction.type === "TIMEOUT") {
+      msg = `Undid: TIMEOUT for Team ${lastAction.team === "A" ? initialData.teamAName : initialData.teamBName}`;
+    } else if (lastAction.type === "SCORE_ADJUST") {
+      msg = `Undid: SCORE ADJUST (${lastAction.amount}) for Team ${lastAction.team === "A" ? initialData.teamAName : initialData.teamBName}`;
+    } else if (lastAction.type === "SUB_IN") {
+      msg = `Undid: SUB IN for #${lastAction.jersey} ${lastAction.playerName}`;
+    } else if (lastAction.type === "SUB_OUT") {
+      msg = `Undid: SUB OUT for #${lastAction.jersey} ${lastAction.playerName}`;
+    } else if (lastAction.type === "GAME_START") {
+      msg = `Undid: TIP-OFF WON by ${lastAction.winner === "A" ? initialData.teamAName : initialData.teamBName}`;
+    } else if (lastAction.type === "ARROW_FLIP") {
+      msg = `Undid: POSSESSION FLIP`;
+    }
+
+    showNotification(msg);
   };
 
   return (
-    <div className="max-w-[1600px] mx-auto px-0 space-y-4">
-      {/* 1. TOP SCOREBOARD HEADER */}
-      <div className="bg-slate-900 text-white p-4 rounded-3xl shadow-2xl border-b-4 border-amber-500 sticky top-0 z-50">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-          {/* Team A Quick Info Unit */}
-          <div className="flex-1 flex items-center justify-between bg-blue-900/20 p-3 rounded-3xl border border-blue-500/30 w-full overflow-hidden">
-            <div className="flex flex-col">
-              <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest leading-none mb-1">
-                {initialData.teamAName}
-              </p>
-              <div className="flex items-center gap-3">
-                <h2 className="text-4xl font-black tabular-nums">{scores.A}</h2>
-                {/* Score adjust: always visible — hover-only broke on tablets */}
-                <div className="flex flex-col gap-0.5">
-                  <button
-                    onClick={() => handleManualScoreAdjustment("A", 1)}
-                    className="w-5 h-5 bg-slate-700 hover:bg-blue-600 rounded text-[10px] font-black flex items-center justify-center transition-colors"
-                    title="Add 1 point (correction)"
-                  >
-                    +
-                  </button>
-                  <button
-                    onClick={() => handleManualScoreAdjustment("A", -1)}
-                    className="w-5 h-5 bg-slate-700 hover:bg-blue-600 rounded text-[10px] font-black flex items-center justify-center transition-colors"
-                    title="Subtract 1 point (correction)"
-                  >
-                    −
-                  </button>
-                </div>
-              </div>
-              {possessionArrow === null && (
-                <button
-                  onClick={() => setInitialJumpBall("A")}
-                  className="mt-2 bg-amber-500 hover:bg-amber-400 text-slate-900 text-[9px] font-black px-3 py-1.5 rounded-lg shadow-md uppercase transition-all w-full text-center animate-pulse"
-                >
-                  Won Tip-Off
-                </button>
-              )}
-            </div>
+    <div className="flex flex-col h-[calc(100vh-5rem)] overflow-hidden bg-slate-50 text-slate-900">
+      {/* ── MAIN 5-COLUMN LAYOUT ── */}
+      <div className="flex-1 grid grid-cols-[140px_minmax(0,1fr)_280px_minmax(0,1fr)_140px] lg:grid-cols-[160px_minmax(0,1fr)_320px_minmax(0,1fr)_160px] gap-2 lg:gap-3 min-h-0 overflow-hidden">
+        {/* COLUMN 1: Team A Info */}
+        <TeamInfoColumn
+          teamSide="A"
+          name={initialData.teamAName}
+          score={scores.A}
+          fouls={teamFouls.A}
+          fibaTO={getTeamFibaTO("A")}
+          possessionArrow={possessionArrow}
+          onScoreAdjust={(amt) => handleManualScoreAdjustment("A", amt)}
+          onInitialJumpBall={() => setInitialJumpBall("A")}
+          onTimeout={() => handleTimeout("A")}
+          color="blue"
+        />
 
-            <div className="flex flex-col items-end gap-2">
-              {/* Team Fouls */}
-              <div className="flex gap-1">
-                {[1, 2, 3, 4, 5].map((f) => (
-                  <div
-                    key={f}
-                    className={`w-2.5 h-2.5 rounded-full border border-blue-500/20 ${teamFouls.A >= f ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]" : "bg-slate-800"}`}
-                  />
-                ))}
-              </div>
-              {/* Timeouts — FIBA 2024-2026 incl. last-2-min cap */}
-              <div className="flex items-center gap-2">
-                <div className="flex gap-1">
-                  {Array.from({ length: getTeamFibaTO("A").limit }).map((_, i) => (
-                    <div
-                      key={i}
-                      className={`w-4 h-1 rounded-full ${i < getTeamFibaTO("A").remaining ? "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" : "bg-slate-800"}`}
-                    />
-                  ))}
-                </div>
-                {getTeamFibaTO("A").isLastTwoMin && (
-                  <span className="text-[7px] font-black text-red-400 uppercase">L2M</span>
-                )}
-                <button
-                  onClick={() => handleTimeout("A")}
-                  className="bg-slate-800 hover:bg-blue-600 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter transition-colors"
-                >
-                  TIMEOUT
-                </button>
-              </div>
-            </div>
-          </div>
+        {/* COLUMN 2: Team A Player Grid */}
+        <TeamJerseyGrid
+          name={initialData.teamAName}
+          players={[...initialData.teamARoster, ...latePlayersA]}
+          playerStats={playerStats}
+          selectedPlayerId={selectedPlayerA}
+          onSelectPlayer={(id) => {
+            setSelectedPlayerA((prev) => (prev === id ? null : id));
+            if (selectedPlayerA !== id) setIsLogOpen(false);
+          }}
+          onScore={(pId, amt) => handleScore("A", pId, amt)}
+          onFoul={(pId) => handleFoul("A", pId)}
+          onStat={(pId, type) => handleStat("A", pId, type)}
+          onAddLatePlayer={(p) => handleAddLatePlayer("A", p)}
+          color="blue"
+          showNotification={showNotification}
+        />
 
-          {/* Team B Quick Info Unit */}
-          <div className="flex-1 flex items-center justify-between bg-red-900/20 p-3 rounded-3xl border border-red-500/30 w-full overflow-hidden">
-            <div className="flex flex-col items-start gap-2">
-              {/* Team Fouls */}
-              <div className="flex gap-1">
-                {[1, 2, 3, 4, 5].map((f) => (
-                  <div
-                    key={f}
-                    className={`w-2.5 h-2.5 rounded-full border border-red-500/20 ${teamFouls.B >= f ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]" : "bg-slate-800"}`}
-                  />
-                ))}
-              </div>
-              {/* Timeouts — FIBA 2024-2026 incl. last-2-min cap */}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleTimeout("B")}
-                  className="bg-slate-800 hover:bg-red-600 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter transition-colors"
-                >
-                  TIMEOUT
-                </button>
-                {getTeamFibaTO("B").isLastTwoMin && (
-                  <span className="text-[7px] font-black text-red-400 uppercase">L2M</span>
-                )}
-                <div className="flex gap-1">
-                  {Array.from({ length: getTeamFibaTO("B").limit }).map((_, i) => (
-                    <div
-                      key={i}
-                      className={`w-4 h-1 rounded-full ${i < getTeamFibaTO("B").remaining ? "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" : "bg-slate-800"}`}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-col items-end text-right">
-              <p className="text-[10px] font-black text-red-400 uppercase tracking-widest leading-none mb-1">
-                {initialData.teamBName}
-              </p>
-              <div className="flex items-center gap-3">
-                {/* Score adjust: always visible — hover-only broke on tablets */}
-                <div className="flex flex-col gap-0.5">
-                  <button
-                    onClick={() => handleManualScoreAdjustment("B", 1)}
-                    className="w-5 h-5 bg-slate-700 hover:bg-red-600 rounded text-[10px] font-black flex items-center justify-center transition-colors"
-                    title="Add 1 point (correction)"
-                  >
-                    +
-                  </button>
-                  <button
-                    onClick={() => handleManualScoreAdjustment("B", -1)}
-                    className="w-5 h-5 bg-slate-700 hover:bg-red-600 rounded text-[10px] font-black flex items-center justify-center transition-colors"
-                    title="Subtract 1 point (correction)"
-                  >
-                    −
-                  </button>
-                </div>
-                <h2 className="text-4xl font-black tabular-nums">{scores.B}</h2>
-              </div>
-              {possessionArrow === null && (
-                <button
-                  onClick={() => setInitialJumpBall("B")}
-                  className="mt-2 bg-amber-500 hover:bg-amber-400 text-slate-900 text-[9px] font-black px-3 py-1.5 rounded-lg shadow-md uppercase transition-all w-full text-center animate-pulse"
-                >
-                  Won Tip-Off
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex flex-col lg:grid lg:grid-cols-3 lg:gap-4 lg:h-[calc(100vh-300px)]">
-        {/* Column 1: Team A */}
-        <div className="order-2 lg:order-1 h-full overflow-y-auto custom-scrollbar pr-1 pb-10">
-          <TeamPlayersSection
-            teamSide="A"
-            name={initialData.teamAName}
-            allPlayers={[...initialData.teamARoster, ...latePlayersA]}
-            onCourtPlayers={teamAOnCourt}
-            benchPlayers={teamABench}
-            stats={playerStats}
-            selectedPlayers={selectedPlayersA}
-            onPlayerSelect={handlePlayerSelection}
-            onScore={(pId, amt) => handleScore("A", pId, amt)}
-            onFoul={(pId) => handleFoul("A", pId)}
-            onStat={(pId, type) => handleStat("A", pId, type)}
-            onAddLatePlayer={handleAddLatePlayer}
-            color="blue"
-            showNotification={showNotification}
-          />
-        </div>
-
-        {/* Column 2: Game Controls, Clocks, Log (Middle) */}
-        <div className="flex flex-col gap-4 p-4 bg-slate-900 text-white rounded-3xl shadow-2xl border-b-4 border-amber-500 order-1 lg:order-2 h-full overflow-hidden">
-          <div className="flex-1 flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-2">
-            {/* Period & Utility Buttons */}
-            <div className="flex justify-between items-center mb-2">
-              <span className="bg-amber-500 text-slate-900 px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter">
+        {/* COLUMN 3: Controls column (DARK THEME) */}
+        <div className="flex flex-col gap-3 bg-slate-950 rounded-3xl p-3 border border-slate-800 min-h-0 overflow-y-auto custom-scrollbar shadow-sm">
+          <div className="flex-1 flex flex-col gap-3 min-h-0">
+            {/* Period & Top Utilities */}
+            <div className="flex flex-col items-center bg-slate-900 p-2 rounded-xl border border-slate-800 shadow-sm w-full mb-1 gap-2">
+              <span className="bg-amber-500 text-slate-900 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest whitespace-nowrap shrink-0 shadow-sm w-full text-center">
                 {periodName}
               </span>
-              <div className="flex gap-2">
-                <button
-                  onClick={onBack}
-                  className="p-1.5 px-3 bg-red-950/40 hover:bg-red-900/60 border border-red-900/50 rounded-lg text-red-500 transition-colors flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest"
-                  title="Discard Scoresheet"
-                >
-                  <Trash2 size={14} />{" "}
-                  <span className="hidden sm:inline">Discard</span>
-                </button>
+              <div className="flex justify-center gap-1.5 overflow-x-auto no-scrollbar w-full">
                 <button
                   onClick={openExternalScoreboard}
-                  className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-amber-500 transition-colors"
+                  className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300 transition-colors flex items-center justify-center active:scale-95 shrink-0"
                   title="Open Scoreboard Window"
                 >
                   <Monitor size={16} />
                 </button>
                 <button
                   onClick={() => setIsSettingsModalOpen(true)}
-                  className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-400 transition-colors"
+                  className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300 transition-colors flex items-center justify-center active:scale-95 shrink-0"
                   title="Keyboard Shortcuts Settings"
                 >
                   <Settings size={16} />
+                </button>
+                <button
+                  onClick={() => setIsAdvanceQuarterConfirmOpen(true)}
+                  className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300 transition-colors flex items-center justify-center active:scale-95 shrink-0"
+                  title="Next Period"
+                >
+                  <ClipboardPaste size={16} />
+                </button>
+                <button
+                  onClick={onBack}
+                  className="p-2 bg-red-900/40 hover:bg-red-800/60 border border-red-800/50 rounded-lg text-red-400 transition-colors flex items-center justify-center active:scale-95 shrink-0"
+                  title="Discard Scoresheet"
+                >
+                  <Trash2 size={16} />{" "}
+                </button>
+                <button
+                  onClick={() => setIsSaveGameConfirmOpen(true)}
+                  className="p-2 bg-emerald-900/40 hover:bg-emerald-800/60 border border-emerald-800/50 rounded-lg text-emerald-400 transition-colors flex items-center justify-center active:scale-95 shrink-0"
+                  title="Finish & Save"
+                >
+                  <Save size={18} />
                 </button>
                 {/* Keyboard Settings Modal - Rendered directly in CommitteeLiveView */}
                 <KeyboardSettingsModal
@@ -912,34 +814,55 @@ export default function CommitteeLiveView({
               </div>
             </div>
 
-            {/* Official Game Clock Controls */}
-            <div className="flex flex-col items-center bg-slate-800/50 p-3 rounded-2xl border border-slate-700 w-full gap-3">
-              <div className="flex items-center gap-6">
-                <div className="flex flex-col items-center">
-                  <span className="text-[8px] font-black text-slate-500 uppercase mb-1">
-                    Game Clock
-                  </span>
-                  {/* Tap clock to manually correct time — same UX as coaching module */}
+            {/* Clocks Section */}
+            <div className="flex flex-col items-center bg-slate-900 p-4 rounded-2xl border border-slate-800 w-full gap-2 shadow-sm">
+              <div className="flex flex-row justify-between items-center w-full gap-4">
+                <div className="flex flex-col items-center w-1/2">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                      Game Clock
+                    </span>
+                    {!isRunning && (
+                      <span className="text-[8px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded leading-none animate-pulse uppercase tracking-widest">
+                        Paused
+                      </span>
+                    )}
+                  </div>
                   <button
-                    onClick={() => { setIsRunning(false); setIsEditClockOpen(true); }}
-                    className="text-4xl font-mono font-black tabular-nums text-amber-500 hover:text-amber-300 transition-colors cursor-pointer"
-                    title="Tap to edit clock"
+                    onClick={() => {
+                      setIsRunning(false);
+                      setIsEditClockOpen(true);
+                    }}
+                    className={`text-4xl lg:text-5xl font-mono font-black tabular-nums transition-colors cursor-pointer ${!isRunning ? "text-amber-600/80 animate-pulse" : "text-amber-500 hover:text-amber-400"}`}
+                    title={`Tap to edit clock\nStart/Stop Clock: ${formatKey(committeeKeybindings.toggleGameClock)}`}
                   >
                     {formatTime(clock)}
                   </button>
                 </div>
-                <div className="w-px h-10 bg-slate-700"></div>
-                <div className="flex flex-col items-center">
-                  <span className="text-[8px] font-black text-slate-500 uppercase mb-1">
-                    Shot Clock
-                  </span>
+                <div className="w-px h-16 bg-slate-300 my-1"></div>
+                <div
+                  className="flex flex-col items-center w-1/2 cursor-help"
+                  title={`Pause/Resume SC: ${formatKey(committeeKeybindings.toggleShotClock)}\nReset 24s: ${formatKey(committeeKeybindings.resetShotClock24)}\nReset 14s: ${formatKey(committeeKeybindings.resetShotClock14)}`}
+                >
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                      Shot Clock
+                    </span>
+                    {isShotClockPaused && (
+                      <span className="text-[8px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded leading-none animate-pulse uppercase tracking-widest">
+                        Paused
+                      </span>
+                    )}
+                  </div>
                   <div
-                    className={`text-4xl font-mono font-black tabular-nums transition-all duration-300 ${
+                    className={`text-4xl lg:text-5xl font-mono font-black tabular-nums transition-all duration-300 ${
                       shotClockPulse
-                        ? "scale-125 text-white drop-shadow-[0_0_15px_rgba(245,158,11,1)]"
-                        : shotClock <= 10
-                          ? "text-red-500 animate-pulse"
-                          : "text-amber-500"
+                        ? "scale-110 text-amber-400 drop-shadow-md"
+                        : isShotClockPaused
+                          ? "text-amber-600/80 animate-pulse"
+                          : shotClock <= 10
+                            ? "text-red-500 animate-pulse"
+                            : "text-amber-500"
                     }`}
                   >
                     {shotClock <= 10 && shotClock > 0
@@ -949,14 +872,14 @@ export default function CommitteeLiveView({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 w-full">
-                <div className="flex gap-1">
+              <div className="flex flex-col gap-2 w-full mt-4">
+                <div className="flex gap-2 w-full">
                   <button
                     onClick={() => setIsRunning(!isRunning)}
-                    className={`flex-1 py-2.5 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95 border-b-4 ${
+                    className={`flex-1 py-4 rounded-xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-1 lg:gap-2 transition-all shadow-md active:scale-95 ${
                       isRunning
-                        ? "bg-red-600 border-red-800 text-white hover:bg-red-500"
-                        : "bg-emerald-500 border-emerald-700 text-white hover:bg-emerald-400"
+                        ? "bg-red-500 hover:bg-red-600 text-white"
+                        : "bg-emerald-500 hover:bg-emerald-600 text-white"
                     }`}
                   >
                     {isRunning ? (
@@ -964,27 +887,30 @@ export default function CommitteeLiveView({
                     ) : (
                       <Play size={16} fill="currentColor" />
                     )}
+                    {isRunning ? "Stop Clock" : "Start Clock"}
                   </button>
                   <button
-                    onClick={() => {
-                      setIsRunning(false);
-                      setClock(quarterSeconds);
-                      triggerShotClockPulse(24);
-                    }}
-                    className="p-2.5 bg-slate-900 border-2 border-slate-700 hover:border-amber-500 rounded-2xl text-slate-400 hover:text-amber-500 transition-all group shadow-inner"
+                    onClick={() => setIsShotClockPaused(!isShotClockPaused)}
+                    className={`flex-1 py-4 rounded-xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-1 lg:gap-2 transition-all shadow-md active:scale-95 ${
+                      isShotClockPaused
+                        ? "bg-amber-500 hover:bg-amber-600 text-slate-900"
+                        : "bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300"
+                    }`}
                   >
-                    <History
-                      size={18}
-                      className="group-hover:rotate-[-45deg] transition-transform"
-                    />
+                    {isShotClockPaused ? (
+                      <Play size={16} fill="currentColor" />
+                    ) : (
+                      <Pause size={16} fill="currentColor" />
+                    )}
+                    {isShotClockPaused ? "Resume SC" : "Pause SC"}
                   </button>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 w-full">
                   <button
                     onClick={() => triggerShotClockPulse(24)}
-                    className="flex-1 flex flex-col items-center justify-center bg-slate-950 border-2 border-slate-700 hover:border-slate-500 rounded-xl py-1.5 transition-all group shadow-lg"
+                    className="flex-1 flex items-center justify-center gap-2 bg-slate-800 border-2 border-slate-700 hover:border-amber-500/50 hover:bg-slate-700 rounded-xl py-3 transition-all shadow-sm active:scale-95"
                   >
-                    <span className="text-[6px] font-black text-slate-500 uppercase tracking-widest mb-0.5 group-hover:text-slate-300">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                       Reset
                     </span>
                     <span className="text-xl font-mono font-black text-amber-500 leading-none">
@@ -993,33 +919,35 @@ export default function CommitteeLiveView({
                   </button>
                   <button
                     onClick={() => triggerShotClockPulse(14)}
-                    className="flex-1 flex flex-col items-center justify-center bg-slate-950 border-2 border-amber-900/40 hover:border-amber-600 rounded-xl py-1.5 transition-all group shadow-lg"
+                    className="flex-1 flex items-center justify-center gap-2 bg-slate-800 border-2 border-slate-700 hover:border-red-500/50 hover:bg-slate-700 rounded-xl py-3 transition-all shadow-sm active:scale-95"
                   >
-                    <span className="text-[6px] font-black text-amber-900/60 uppercase tracking-widest mb-0.5 group-hover:text-amber-500">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                       Reset
                     </span>
-                    <span className="text-xl font-mono font-black text-red-500 leading-none">
+                    <span className="text-xl font-mono font-black text-red-400 leading-none">
                       14
                     </span>
                   </button>
                 </div>
               </div>
 
-              {/* Buzzer / Horn Button */}
               <button
-                onClick={playHorn}
-                className="w-full bg-red-600 hover:bg-red-500 text-white py-3 rounded-2xl font-black uppercase tracking-widest text-sm transition-all shadow-[0_0_15px_rgba(220,38,38,0.4)] active:scale-95 flex items-center justify-center gap-2 mt-1 border-b-4 border-red-800"
+                disabled={true}
+                className="w-full opacity-50 cursor-not-allowed bg-slate-800 text-slate-500 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center gap-2 mt-2 border border-slate-700 shadow-inner"
               >
-                <BellRing size={20} />
-                Sound Horn (Sub / Timeout)
+                <BellRing size={16} />
+                Horn (Disabled)
               </button>
             </div>
 
             {/* Possession Arrow */}
-            <div className="flex flex-col items-center bg-slate-800/50 p-2 rounded-2xl border border-slate-700 w-full gap-2">
-              <div className="flex items-center gap-6">
+            <div className="flex flex-col items-center bg-slate-900 p-4 rounded-xl border border-slate-800 w-full gap-3 mt-auto shadow-sm">
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                Possession Arrow
+              </span>
+              <div className="flex items-center justify-center gap-8 w-full">
                 <div
-                  className={`transition-all duration-500 ${possessionArrow === "A" ? "text-amber-500 scale-150" : "text-slate-700"}`}
+                  className={`transition-all duration-500 ${possessionArrow === "A" ? "text-amber-500 scale-125" : "text-slate-700"}`}
                 >
                   <ArrowLeft
                     size={32}
@@ -1028,12 +956,12 @@ export default function CommitteeLiveView({
                 </div>
                 <button
                   onClick={handleJumpBall}
-                  className="bg-slate-900 hover:bg-slate-700 p-3 rounded-2xl border border-slate-700 transition-all active:scale-95"
+                  className="bg-slate-800 hover:bg-slate-700 p-3 rounded-full border border-slate-700 transition-all active:scale-95 shadow-sm text-slate-400 hover:text-white"
                 >
-                  <RotateCcw className="text-slate-400" size={24} />
+                  <RotateCcw size={20} />
                 </button>
                 <div
-                  className={`transition-all duration-500 ${possessionArrow === "B" ? "text-amber-500 scale-150" : "text-slate-700"}`}
+                  className={`transition-all duration-500 ${possessionArrow === "B" ? "text-amber-500 scale-125" : "text-slate-700"}`}
                 >
                   <ArrowRight
                     size={32}
@@ -1041,176 +969,175 @@ export default function CommitteeLiveView({
                   />
                 </div>
               </div>
-              <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">
-                Next Possession Arrow
+            </div>
+
+            {/* Undo Button */}
+            <button
+              onClick={undoLastAction}
+              className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center gap-2 shadow-sm active:scale-95"
+            >
+              <Undo2 size={16} /> Undo Last Action
+            </button>
+          </div>
+        </div>
+
+        {/* COLUMN 4: Team B Player Grid */}
+        <TeamJerseyGrid
+          name={initialData.teamBName}
+          players={[...initialData.teamBRoster, ...latePlayersB]}
+          playerStats={playerStats}
+          selectedPlayerId={selectedPlayerB}
+          onSelectPlayer={(id) => {
+            setSelectedPlayerB((prev) => (prev === id ? null : id));
+            if (selectedPlayerB !== id) setIsLogOpen(false);
+          }}
+          onScore={(pId, amt) => handleScore("B", pId, amt)}
+          onFoul={(pId) => handleFoul("B", pId)}
+          onStat={(pId, type) => handleStat("B", pId, type)}
+          onAddLatePlayer={(p) => handleAddLatePlayer("B", p)}
+          color="red"
+          showNotification={showNotification}
+        />
+
+        {/* COLUMN 5: Team B Info */}
+        <TeamInfoColumn
+          teamSide="B"
+          name={initialData.teamBName}
+          score={scores.B}
+          fouls={teamFouls.B}
+          fibaTO={getTeamFibaTO("B")}
+          possessionArrow={possessionArrow}
+          onScoreAdjust={(amt) => handleManualScoreAdjustment("B", amt)}
+          onInitialJumpBall={() => setInitialJumpBall("B")}
+          onTimeout={() => handleTimeout("B")}
+          color="red"
+        />
+      </div>
+
+      {/* ── BOTTOM COLLAPSIBLE GAME LOG ── */}
+      <div className="bg-white border-t border-slate-200 shrink-0 z-40 transition-all duration-300 flex flex-col shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.05)]">
+        <div
+          onClick={() => {
+            if (!isLogOpen) {
+              setSelectedPlayerA(null);
+              setSelectedPlayerB(null);
+            }
+            setIsLogOpen(!isLogOpen);
+          }}
+          className="flex items-center justify-between p-3 lg:p-4 cursor-pointer hover:bg-slate-50 select-none transition-colors"
+        >
+          <div className="flex items-center gap-2 px-2">
+            <History size={16} className="text-blue-600" />
+            <span className="text-xs font-black uppercase tracking-widest text-slate-800">
+              Game Log {logs.length > 0 && `(${logs.length} Events)`}
+            </span>
+          </div>
+          <div className="flex items-center gap-4 px-2">
+            <div className="text-slate-400">
+              {isLogOpen ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+            </div>
+          </div>
+        </div>
+
+        {isLogOpen && (
+          <div className="h-48 overflow-y-auto px-4 pb-4 pt-1 flex flex-col gap-2 custom-scrollbar bg-white">
+            {logs.length === 0 ? (
+              <p className="text-[10px] text-slate-600 italic text-center py-10 font-bold uppercase tracking-widest">
+                No events recorded
               </p>
-            </div>
+            ) : (
+              logs.map((log, i) => {
+                const isScore =
+                  log.type === "SCORE" || log.type === "SCORE_ADJUST";
+                const isFoul = log.type === "FOUL";
+                const isTimeout = log.type === "TIMEOUT";
+                const isSub = log.type === "SUB_IN" || log.type === "SUB_OUT";
+                const isStat =
+                  log.type === "REBOUND" ||
+                  log.type === "ASSIST" ||
+                  log.type === "STEAL";
 
-            {/* Recent Actions Log */}
-            <div className="bg-slate-950 rounded-2xl p-4 border border-slate-800 flex flex-col gap-3 shadow-inner">
-              <div className="flex items-center justify-between">
-                <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2">
-                  <History size={14} className="text-amber-500" /> Game Log
-                </h3>
-                <button
-                  onClick={undoLastAction}
-                  className="text-[8px] font-black text-slate-400 hover:text-white uppercase flex items-center gap-1 transition-colors bg-slate-800 px-2 py-1 rounded-md"
-                >
-                  <Undo2 size={10} /> Undo
-                </button>
-              </div>
-              <div className="space-y-1.5 h-48 overflow-y-auto pr-2 custom-scrollbar">
-                {logs.length === 0 ? (
-                  <p className="text-[10px] text-slate-600 italic text-center py-10 font-bold uppercase tracking-widest">
-                    No events recorded
-                  </p>
-                ) : (
-                  logs.map((log, i) => {
-                    const isScore =
-                      log.type === "SCORE" || log.type === "SCORE_ADJUST";
-                    const isFoul = log.type === "FOUL";
-                    const isTimeout = log.type === "TIMEOUT";
-                    const isSub =
-                      log.type === "SUB_IN" || log.type === "SUB_OUT";
-                    const isStat =
-                      log.type === "REBOUND" ||
-                      log.type === "ASSIST" ||
-                      log.type === "STEAL";
-                    return (
-                      <div
-                        key={i}
-                        className={`flex items-center justify-between p-2 rounded-xl border animate-in slide-in-from-top-1 transition-all ${
-                          isScore
-                            ? "bg-emerald-500/20 border-emerald-500/40"
-                            : isFoul
-                              ? "bg-red-500/20 border-red-500/40"
-                              : isTimeout
-                                ? "bg-amber-500/20 border-amber-500/40"
-                                : isSub
-                                  ? "bg-indigo-500/20 border-indigo-500/40"
-                                  : isStat
-                                    ? "bg-cyan-500/20 border-cyan-500/40"
-                                    : "bg-slate-800 border-slate-700"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="text-[8px] font-black bg-slate-800 text-slate-300 w-5 h-5 rounded-full flex items-center justify-center border border-slate-700">
-                            {log.quarter > 4
-                              ? `OT${log.quarter - 4}`
-                              : `Q${log.quarter}`}
-                          </span>
-                          <div className="flex flex-col">
-                            <span
-                              className={`text-[9px] font-black uppercase leading-tight ${log.team === "A" || log.winner === "A" ? "text-blue-300" : log.team === "B" || log.winner === "B" ? "text-red-300" : "text-slate-300"}`}
-                            >
-                              {log.type === "TIMEOUT" ||
-                              log.type === "SCORE_ADJUST"
-                                ? `TEAM ${log.team === "A" ? initialData.teamAName : initialData.teamBName}`
-                                : log.type === "GAME_START"
-                                  ? `TIP-OFF: ${log.winner === "A" ? initialData.teamAName : initialData.teamBName}`
-                                  : log.type === "ARROW_FLIP"
-                                    ? `POSS: ${log.team === "A" ? initialData.teamAName : initialData.teamBName}`
-                                    : log.type === "PERIOD_END"
-                                      ? ""
-                                      : `#${log.jersey} ${log.playerName}`}
-                            </span>
-                            <span
-                              className={`text-[8px] font-bold uppercase tracking-tighter ${
-                                isScore
-                                  ? "text-emerald-300"
-                                  : isFoul
-                                    ? "text-red-300"
-                                    : isTimeout
-                                      ? "text-amber-300"
-                                      : isSub
-                                        ? "text-indigo-300"
-                                        : isStat
-                                          ? "text-cyan-300"
-                                          : "text-slate-500"
-                              }`}
-                            >
-                              {" "}
-                              {/**GAME LOG details on the left side */}
-                              {log.type === "FOUL"
-                                ? "PERSONAL FOUL"
-                                : log.type === "TIMEOUT"
-                                  ? "TIMEOUT"
-                                  : log.type === "SCORE"
-                                    ? `+${log.amount} PTS`
-                                    : log.type === "REBOUND"
-                                      ? "REBOUND"
-                                      : log.type === "ASSIST"
-                                        ? "ASSIST"
-                                        : log.type === "STEAL"
-                                          ? "STEAL"
-                                          : log.type === "GAME_START"
-                                            ? "JUMP BALL WON"
-                                            : log.type === "PERIOD_END"
-                                              ? "PERIOD END"
-                                              : log.type === "ARROW_FLIP"
-                                                ? "HELD BALL"
-                                                : log.type === "SCORE_ADJUST"
-                                                  ? `${log.amount} SCORE ADJUST`
-                                                  : log.type === "SUB_IN"
-                                                    ? "IN"
-                                                    : log.type === "SUB_OUT"
-                                                      ? "OUT"
-                                                      : log.type}
-                            </span>
-                          </div>
-                        </div>
-                        {/**GAME LOG details on the right side */}
-                        <div className="flex flex-col items-end">
-                          <span className="text-[9px] font-black text-amber-500/80 tabular-nums">
-                            {formatTime(log.clock)}
-                          </span>
-                        </div>
+                return (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between p-2 rounded-xl border border-slate-200 bg-white transition-all hover:bg-slate-50"
+                  >
+                    {/* LEFT SIDE: Quarter, Jersey, Player, Team */}
+                    <div className="flex flex-col min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-black bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200 shadow-sm shrink-0">
+                          {log.quarter > 4
+                            ? `OT${log.quarter - 4}`
+                            : `Q${log.quarter}`}
+                        </span>
+                        <span
+                          className={`text-[10px] font-black uppercase leading-tight truncate ${log.team === "A" || log.winner === "A" ? "text-blue-600" : log.team === "B" || log.winner === "B" ? "text-red-600" : "text-slate-700"}`}
+                        >
+                          {log.type === "TIMEOUT" || log.type === "SCORE_ADJUST"
+                            ? `TEAM ${log.team === "A" ? initialData.teamAName : initialData.teamBName}`
+                            : log.type === "GAME_START"
+                              ? `TIP-OFF: ${log.winner === "A" ? initialData.teamAName : initialData.teamBName}`
+                              : log.type === "ARROW_FLIP"
+                                ? `POSS: ${log.team === "A" ? initialData.teamAName : initialData.teamBName}`
+                                : log.type === "PERIOD_END"
+                                  ? "PERIOD END"
+                                  : `#${log.jersey} ${log.playerName}`}
+                        </span>
                       </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
+                      {log.type !== "TIMEOUT" &&
+                        log.type !== "SCORE_ADJUST" &&
+                        log.type !== "GAME_START" &&
+                        log.type !== "ARROW_FLIP" &&
+                        log.type !== "PERIOD_END" && (
+                          <span className="text-[9px] font-bold text-slate-400 uppercase mt-0.5 ml-[32px] truncate">
+                            {log.team === "A"
+                              ? initialData.teamAName
+                              : initialData.teamBName}
+                          </span>
+                        )}
+                    </div>
+
+                    {/* RIGHT SIDE: Time, Action */}
+                    <div className="flex flex-col items-end shrink-0 pl-2">
+                      <span className="text-[10px] font-black text-slate-400 tabular-nums leading-tight">
+                        {formatTime(log.clock)}
+                      </span>
+                      <span
+                        className={`text-[10px] font-black uppercase tracking-tighter mt-0.5 ${isScore ? "text-emerald-600" : isFoul ? "text-red-600" : isTimeout ? "text-amber-600" : isSub ? "text-indigo-600" : isStat ? "text-cyan-600" : "text-slate-500"}`}
+                      >
+                        {log.type === "FOUL"
+                          ? "PERSONAL FOUL"
+                          : log.type === "TIMEOUT"
+                            ? "TIMEOUT"
+                            : log.type === "SCORE"
+                              ? `+${log.amount} PTS`
+                              : log.type === "REBOUND"
+                                ? "REBOUND"
+                                : log.type === "ASSIST"
+                                  ? "ASSIST"
+                                  : log.type === "STEAL"
+                                    ? "STEAL"
+                                    : log.type === "GAME_START"
+                                      ? "JUMP BALL WON"
+                                      : log.type === "PERIOD_END"
+                                        ? ""
+                                        : log.type === "ARROW_FLIP"
+                                          ? "HELD BALL"
+                                          : log.type === "SCORE_ADJUST"
+                                            ? `${log.amount > 0 ? "+" : ""}${log.amount} ADJUST`
+                                            : log.type === "SUB_IN"
+                                              ? "IN"
+                                              : log.type === "SUB_OUT"
+                                                ? "OUT"
+                                                : log.type}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
-
-          {/* Period Advance & Save */}
-          <div className="bg-slate-800/50 rounded-2xl p-3 flex flex-col justify-between gap-3 border border-slate-700 shrink-0">
-            <button
-              onClick={() => setIsAdvanceQuarterConfirmOpen(true)}
-              className="w-full bg-slate-700 border-2 border-slate-600 hover:border-slate-500 py-4 rounded-2xl font-black uppercase text-sm transition-all flex items-center justify-center gap-3 shadow-sm text-white"
-            >
-              End {periodName}
-            </button>
-
-            <button
-              onClick={() => setIsSaveGameConfirmOpen(true)}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-6 rounded-2xl font-black uppercase tracking-widest text-lg transition-all shadow-xl flex items-center justify-center gap-3"
-            >
-              <Save size={24} />
-              Finish & Save Game
-            </button>
-          </div>
-        </div>
-
-        {/* Column 3: Team B (Right) */}
-        <div className="order-3 lg:order-3 h-full overflow-y-auto custom-scrollbar pr-1 pb-10">
-          <TeamPlayersSection
-            teamSide="B"
-            name={initialData.teamBName}
-            allPlayers={[...initialData.teamBRoster, ...latePlayersB]}
-            onCourtPlayers={teamBOnCourt}
-            benchPlayers={teamBBench}
-            stats={playerStats}
-            selectedPlayers={selectedPlayersB}
-            onPlayerSelect={handlePlayerSelection}
-            onScore={(pId, amt) => handleScore("B", pId, amt)}
-            onFoul={(pId) => handleFoul("B", pId)}
-            onStat={(pId, type) => handleStat("B", pId, type)}
-            onAddLatePlayer={handleAddLatePlayer}
-            color="red"
-            showNotification={showNotification}
-          />
-        </div>
+        )}
       </div>
 
       {/* Confirmation Modal for Advance Quarter */}
@@ -1254,308 +1181,341 @@ export default function CommitteeLiveView({
   );
 }
 
-function TeamPlayersSection({
+// ── TEAM INFO COLUMN ────────────────────────────────────────────────────────
+function TeamInfoColumn({
   teamSide,
   name,
-  allPlayers,
-  onCourtPlayers,
-  benchPlayers,
-  stats,
-  selectedPlayers,
-  onPlayerSelect,
-  onScore,
-  onFoul,
-  onStat,
+  score,
+  fouls,
+  fibaTO,
+  possessionArrow,
+  onScoreAdjust,
+  onInitialJumpBall,
+  onTimeout,
   color,
-  showNotification,
-  onAddLatePlayer,
 }) {
-  const themeColor = color === "blue" ? "blue" : "red";
-  const accentBg = color === "blue" ? "blue-50" : "red-50";
-  const accentText = color === "blue" ? "blue-600" : "red-600";
+  const isBlue = color === "blue";
+  const borderClass = isBlue
+    ? "border-t-blue-500 border-slate-200"
+    : "border-t-red-500 border-slate-200";
+  const textClass = isBlue ? "text-blue-600" : "text-red-600";
+  const btnHover = isBlue
+    ? "hover:bg-blue-600 hover:text-white"
+    : "hover:bg-red-600 hover:text-white";
 
-  const [isAddingLate, setIsAddingLate] = useState(false);
-  const [lateName, setLateName] = useState("");
-  const [lateJersey, setLateJersey] = useState("");
-  // Only one bench player can be expanded at a time — clicking another auto-closes the previous
-  const [expandedBenchId, setExpandedBenchId] = useState(null);
+  const [scorePulse, setScorePulse] = useState(false);
+  useEffect(() => {
+    setScorePulse(true);
+    const timer = setTimeout(() => setScorePulse(false), 300);
+    return () => clearTimeout(timer);
+  }, [score]);
 
   return (
     <div
-      className={`bg-white rounded-3xl shadow-sm border-t-8 border-${themeColor}-500 p-6 space-y-6`}
+      className={`flex flex-col items-center p-3 rounded-2xl border border-t-8 ${borderClass} bg-white min-h-0 overflow-y-auto custom-scrollbar h-full shadow-sm`}
     >
-      {/* On Court Players */}
-      <div className="space-y-2">
-        <h4 className="text-xs font-black uppercase text-slate-500 ml-1">
-          On Court
-        </h4>
-        <div className="grid grid-cols-1 gap-2">
-          {onCourtPlayers.length === 0 ? (
-            <div className="col-span-full py-6 text-center border-2 border-dashed border-slate-100 rounded-2xl">
-              <p className="text-xs text-slate-300 font-black uppercase tracking-widest italic">
-                No players on court.
-              </p>
-            </div>
-          ) : (
-            onCourtPlayers.map((player) => (
-              <PlayerCard
-                key={player.id}
-                player={player}
-                stats={stats[player.id]}
-                onScore={onScore}
-                onFoul={onFoul}
-                onStat={onStat}
-                color={color}
-                isSelected={selectedPlayers.includes(player.id)}
-                onSelect={() => onPlayerSelect(teamSide, player.id)}
-                isOnCourt={true}
-              />
-            ))
-          )}
+      <h2
+        className={`text-sm lg:text-lg font-black uppercase text-center mb-2 tracking-tighter ${textClass} leading-tight w-full truncate`}
+      >
+        {name}
+      </h2>
+
+      <div
+        className={`text-6xl lg:text-7xl font-black tabular-nums mb-3 mt-2 tracking-tighter transition-all duration-300 ${scorePulse ? `scale-110 ${isBlue ? "text-blue-500" : "text-red-500"}` : "text-slate-900"}`}
+      >
+        {score}
+      </div>
+
+      <div className="flex gap-2 w-full mb-6">
+        <button
+          onClick={() => onScoreAdjust(-1)}
+          className={`flex-1 py-2 bg-white border border-slate-200 rounded-xl font-black text-slate-700 ${btnHover} transition-all shadow-sm active:scale-95`}
+        >
+          -1
+        </button>
+        <button
+          onClick={() => onScoreAdjust(1)}
+          className={`flex-1 py-2 bg-white border border-slate-200 rounded-xl font-black text-slate-700 ${btnHover} transition-all shadow-sm active:scale-95`}
+        >
+          +1
+        </button>
+      </div>
+
+      {possessionArrow === null && (
+        <button
+          onClick={onInitialJumpBall}
+          className="w-full bg-amber-400 hover:bg-amber-500 text-slate-900 text-xs font-black py-3 rounded-xl mb-6 animate-pulse uppercase tracking-widest shadow-sm active:scale-95 transition-all"
+        >
+          Won Tip-Off
+        </button>
+      )}
+
+      <div className="w-full flex flex-col items-center bg-slate-50 p-4 rounded-xl mb-4 border border-slate-200 shadow-sm">
+        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+          Team Fouls
+        </span>
+        <div className="flex gap-2">
+          {[1, 2, 3, 4, 5].map((f) => (
+            <div
+              key={f}
+              className={`w-4 h-4 rounded-full border-2 ${fouls >= f ? "bg-red-500 border-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]" : "bg-white border-slate-300"}`}
+            />
+          ))}
         </div>
       </div>
 
-      {/* Bench Players */}
-      <div className="space-y-2 border-t border-slate-100 pt-4 mt-4">
-        <h4 className="text-xs font-black uppercase text-slate-500 ml-1">
-          Bench
-        </h4>
-        <div className="grid grid-cols-1 gap-2">
-          {benchPlayers.length === 0 ? (
-            <div className="col-span-full py-6 text-center border-2 border-dashed border-slate-100 rounded-2xl">
-              <p className="text-xs text-slate-300 font-black uppercase tracking-widest italic">
-                Bench is empty.
-              </p>
-            </div>
-          ) : (
-            benchPlayers.map((player) => (
-              <PlayerCard
-                key={player.id}
-                player={player}
-                stats={stats[player.id]}
-                onScore={onScore}
-                onFoul={onFoul}
-                onStat={onStat}
-                color={color}
-                isSelected={selectedPlayers.includes(player.id)}
-                onSelect={() => onPlayerSelect(teamSide, player.id)}
-                onExpandToggle={() =>
-                  setExpandedBenchId((prev) =>
-                    prev === player.id ? null : player.id,
-                  )
-                }
-                isExpanded={expandedBenchId === player.id}
-                isOnCourt={false}
-              />
-            ))
-          )}
-
-          {/* Late Arrival Input */}
-          {isAddingLate ? (
+      <div className="w-full flex flex-col items-center bg-slate-50 p-4 rounded-xl border border-slate-200 mt-auto shadow-sm">
+        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">
+          Timeouts
+        </span>
+        <div className="flex gap-1.5 mb-4">
+          {Array.from({ length: fibaTO.limit }).map((_, i) => (
             <div
-              className={`flex gap-2 mt-2 p-2 bg-${themeColor}-50 border border-${themeColor}-200 rounded-xl animate-in fade-in zoom-in duration-200`}
-            >
-              <input
-                value={lateJersey}
-                onChange={(e) => setLateJersey(e.target.value)}
-                placeholder="#"
-                className="w-10 border rounded p-1.5 text-xs font-bold text-center outline-none"
-              />
-              <input
-                value={lateName}
-                onChange={(e) => setLateName(e.target.value)}
-                placeholder="Player Name"
-                className="flex-1 border rounded p-1.5 text-xs font-bold outline-none"
-              />
-              <button
-                onClick={() => {
-                  if (!lateName || !lateJersey) return;
-                  if (
-                    allPlayers.some(
-                      (p) => p.jersey.toString() === lateJersey.toString(),
-                    )
-                  ) {
-                    showNotification("Jersey already exists.");
-                    return;
-                  }
-                  onAddLatePlayer(teamSide, {
-                    name: lateName,
-                    jersey: lateJersey,
-                  });
-                  setIsAddingLate(false);
-                  setLateName("");
-                  setLateJersey("");
-                }}
-                className={`bg-${themeColor}-600 text-white px-3 py-1.5 rounded-lg text-xs font-black uppercase shadow-md hover:bg-${themeColor}-700`}
-              >
-                Add
-              </button>
-              <button
-                onClick={() => setIsAddingLate(false)}
-                className="text-slate-400 hover:text-slate-600 px-2 font-black"
-              >
-                X
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setIsAddingLate(true)}
-              className="w-full mt-2 py-3 border-2 border-dashed border-slate-200 rounded-xl text-[10px] font-black text-slate-400 hover:border-slate-400 hover:text-slate-600 transition-colors uppercase tracking-[0.2em] flex items-center justify-center gap-2"
-            >
-              <UserPlus size={14} /> Add Late Player
-            </button>
-          )}
+              key={i}
+              className={`w-8 h-2 rounded-full ${i < fibaTO.remaining ? "bg-amber-400 shadow-[0_0_5px_rgba(245,158,11,0.4)]" : "bg-white border border-slate-300"}`}
+            />
+          ))}
         </div>
+        <button
+          onClick={onTimeout}
+          className={`w-full py-3 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-700 ${btnHover} transition-all shadow-sm active:scale-95`}
+        >
+          Call Timeout
+        </button>
+        {fibaTO.isLastTwoMin && (
+          <span className="text-[9px] text-red-500 mt-2 font-black uppercase tracking-widest bg-red-50 px-2 py-1 rounded-md border border-red-100">
+            L2M CAP
+          </span>
+        )}
       </div>
     </div>
   );
 }
 
-function PlayerCard({
-  player,
-  stats,
+// ── JERSEY GRID ─────────────────────────────────────────────────────────────
+// Pseudo-code: show all players as a compact grid of jersey number buttons,
+//              sorted by jersey number. Tapping a jersey opens the action panel
+//              at the bottom for stat entry. One player can be open at a time.
+// ELI5: Like a scorebook — find the number, tap it, record the stat. Two taps max.
+function TeamJerseyGrid({
+  name,
+  players,
+  playerStats,
+  selectedPlayerId,
+  onSelectPlayer,
   onScore,
   onFoul,
   onStat,
+  onAddLatePlayer,
   color,
-  isSelected,
-  onSelect,
-  isOnCourt,
-  isExpanded = false,
-  onExpandToggle = () => {},
+  showNotification,
 }) {
   const themeColor = color === "blue" ? "blue" : "red";
-  const pStats = stats || {
-    points: 0,
-    fouls: 0,
-    rebounds: 0,
-    assists: 0,
-    steals: 0,
-  };
-  const isFouledOut = pStats.fouls >= 5;
+  const borderClass =
+    themeColor === "blue"
+      ? "border-t-blue-500 border-slate-200"
+      : "border-t-red-500 border-slate-200";
+  const [isAddingLate, setIsAddingLate] = useState(false);
+  const [lateName, setLateName] = useState("");
+  const [lateJersey, setLateJersey] = useState("");
 
+  const sorted = useMemo(
+    () =>
+      [...players].sort(
+        (a, b) => (parseInt(a.jersey, 10) || 0) - (parseInt(b.jersey, 10) || 0),
+      ),
+    [players],
+  );
+
+  const selectedPlayer = sorted.find((p) => p.id === selectedPlayerId) || null;
+  const selStats = selectedPlayer
+    ? playerStats[selectedPlayer.id] || {
+        points: 0,
+        fouls: 0,
+        rebounds: 0,
+        assists: 0,
+        steals: 0,
+      }
+    : null;
 
   return (
     <div
-      className={`group flex flex-col p-3 rounded-2xl transition-all border ${
-        isSelected
-          ? `bg-${themeColor}-100 border-${themeColor}-500 ring-2 ring-${themeColor}-200`
-          : isOnCourt
-            ? `bg-white border-${themeColor}-400 shadow-md ring-1 ring-${themeColor}-50`
-            : `bg-slate-50 border-slate-100 opacity-70 hover:opacity-100`
-      }`}
+      className={`flex flex-col min-h-0 bg-white rounded-2xl overflow-hidden border border-t-8 ${borderClass} shadow-sm`}
     >
-      <div className="flex items-center justify-between">
-        <div
-          className="flex items-center gap-3 cursor-pointer flex-1"
-          onClick={onSelect}
+      {/* Team header */}
+      <div
+        className={`px-4 py-3 border-b border-slate-200 shrink-0 bg-white flex justify-center`}
+      >
+        <h3
+          className={`text-xs md:text-sm font-black uppercase tracking-widest text-${themeColor}-600 truncate max-w-full`}
         >
-          <span
-            className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg ${
-              isFouledOut
-                ? "bg-slate-300 text-slate-500"
-                : `bg-white border-2 border-${themeColor}-500 text-${themeColor}-700`
-            }`}
-          >
-            {player.jersey}
-          </span>
-          <div className="flex flex-col">
-            <span
-              className={`font-black uppercase tracking-tight ${isFouledOut ? "text-slate-400 line-through" : "text-slate-700"}`}
-            >
-              {player.name}
-            </span>
-            {/* Stat chips — label above value, subtle bg per category */}
-            <div className="flex flex-wrap gap-1 mt-1.5">
-              <div className="flex flex-col items-center bg-blue-50 text-blue-700 px-2 py-0.5 rounded-lg min-w-[32px]">
-                <span className="text-[7px] font-black uppercase leading-none">PTS</span>
-                <span className="text-sm font-black leading-tight">{pStats.points}</span>
-              </div>
-              <div className={`flex flex-col items-center px-2 py-0.5 rounded-lg min-w-[32px] ${pStats.fouls >= 4 ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-500"}`}>
-                <span className="text-[7px] font-black uppercase leading-none">FLS</span>
-                <span className="text-sm font-black leading-tight">{pStats.fouls}/5</span>
-              </div>
-              <div className="flex flex-col items-center bg-slate-100 text-slate-600 px-2 py-0.5 rounded-lg min-w-[32px]">
-                <span className="text-[7px] font-black uppercase leading-none">REB</span>
-                <span className="text-sm font-black leading-tight">{pStats.rebounds}</span>
-              </div>
-              <div className="flex flex-col items-center bg-slate-100 text-slate-600 px-2 py-0.5 rounded-lg min-w-[32px]">
-                <span className="text-[7px] font-black uppercase leading-none">AST</span>
-                <span className="text-sm font-black leading-tight">{pStats.assists}</span>
-              </div>
-              <div className="flex flex-col items-center bg-slate-100 text-slate-600 px-2 py-0.5 rounded-lg min-w-[32px]">
-                <span className="text-[7px] font-black uppercase leading-none">STL</span>
-                <span className="text-sm font-black leading-tight">{pStats.steals}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1.5 shrink-0">
-          {/* Foul button: on-court always; bench only when expanded */}
-          {(isOnCourt || isExpanded) && (
-            <button
-              disabled={isFouledOut}
-              onClick={() => onFoul(player.id)}
-              title="Record Personal Foul"
-              className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl transition-all ${
-                isFouledOut
-                  ? "bg-slate-100 text-slate-300 cursor-not-allowed"
-                  : "bg-white border-2 border-red-100 text-red-500 hover:bg-red-600 hover:text-white shadow-sm active:scale-95"
-              }`}
-            >
-              <ShieldAlert size={16} />
-              <span className="text-[7px] font-black uppercase leading-none mt-0.5">Foul</span>
-            </button>
-          )}
-
-          {/* Chevron toggle — bench players only; independent of sub selection */}
-          {!isOnCourt && (
-            <button
-              onClick={onExpandToggle}
-              title={isExpanded ? "Hide stats" : "Show stats"}
-              className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all"
-            >
-              {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-            </button>
-          )}
-        </div>
+          {name}
+        </h3>
       </div>
 
-      {/* Score + stat buttons: on-court always; bench when expanded (tap card to toggle) */}
-      {(isOnCourt || isExpanded) && !isFouledOut && (
-        <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-slate-200">
-          <div className="grid grid-cols-3 gap-2">
-            {[1, 2, 3].map((pts) => (
+      {/* Jersey grid — fills height when nothing selected; scrollable (hidden bar) when a player is selected */}
+      <div className={`flex flex-col p-2 min-h-0 ${selectedPlayerId ? "overflow-y-auto no-scrollbar" : "flex-1"}`}>
+        <div className={`grid grid-cols-3 gap-1.5 ${selectedPlayerId ? "" : "flex-1 min-h-0"}`}>
+          {sorted.map((p) => {
+            const ps = playerStats[p.id] || { points: 0, fouls: 0 };
+            const fouledOut = ps.fouls >= 5;
+            const isSelected = selectedPlayerId === p.id;
+            return (
               <button
-                key={pts}
-                onClick={() => onScore(player.id, pts)}
-                className={`bg-${themeColor}-600 hover:bg-${themeColor}-700 text-white py-2 rounded-xl font-black text-sm transition-all active:scale-95 shadow-md`}
+                key={p.id}
+                onClick={() => onSelectPlayer(p.id)}
+                disabled={false}
+                className={`flex flex-col items-center justify-center p-1 rounded-xl transition-all border-2 font-black min-h-[52px] ${selectedPlayerId ? "" : "h-full"}
+                  ${
+                    isSelected
+                      ? `bg-${themeColor}-600 border-${themeColor}-500 text-white scale-105 shadow-md`
+                      : fouledOut
+                        ? "bg-slate-50 border-slate-100 text-slate-300"
+                        : `bg-white border-slate-200 text-slate-700 hover:border-${themeColor}-300 hover:bg-${themeColor}-50 active:scale-95 shadow-sm`
+                  }`}
               >
-                +{pts}
+                <span
+                  className={`text-2xl lg:text-3xl leading-none ${fouledOut ? "line-through opacity-40" : ""}`}
+                >
+                  {p.jersey}
+                </span>
               </button>
-            ))}
+            );
+          })}
+        </div>
+
+        {/* Late player add */}
+        {isAddingLate ? (
+          <div className="flex gap-1 mt-2 p-1.5 bg-slate-50 border border-slate-200 rounded-xl shrink-0">
+            <input
+              value={lateJersey}
+              onChange={(e) => setLateJersey(e.target.value)}
+              placeholder="#"
+              className="w-8 bg-white text-slate-800 border border-slate-200 rounded-lg p-1 text-[10px] text-center font-bold outline-none focus:border-amber-500"
+            />
+            <input
+              value={lateName}
+              onChange={(e) => setLateName(e.target.value)}
+              placeholder="Player Name"
+              className="flex-1 min-w-0 bg-white text-slate-800 border border-slate-200 rounded-lg p-1 text-[10px] font-bold outline-none focus:border-amber-500"
+            />
+            <button
+              onClick={() => {
+                if (!lateName || !lateJersey) return;
+                if (
+                  players.some(
+                    (p) => p.jersey.toString() === lateJersey.toString(),
+                  )
+                ) {
+                  showNotification("Jersey already exists.");
+                  return;
+                }
+                onAddLatePlayer({ name: lateName, jersey: lateJersey });
+                setIsAddingLate(false);
+                setLateName("");
+                setLateJersey("");
+              }}
+              className={`bg-${themeColor}-100 text-${themeColor}-700 hover:bg-${themeColor}-600 hover:text-white px-2 py-1 rounded-lg text-[9px] font-black uppercase transition-colors`}
+            >
+              Add
+            </button>
+            <button
+              onClick={() => setIsAddingLate(false)}
+              className="text-slate-400 hover:text-slate-600 px-1 font-black transition-colors"
+            >
+              ✕
+            </button>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+        ) : (
+          <button
+            onClick={() => setIsAddingLate(true)}
+            className="w-full mt-2 py-1.5 border border-dashed border-slate-300 rounded-xl text-[9px] font-black text-slate-500 hover:text-slate-700 hover:border-slate-400 hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5 uppercase tracking-widest shrink-0 shadow-sm"
+          >
+            <UserPlus size={12} /> Late Player
+          </button>
+        )}
+      </div>
+
+      {/* Action panel — appears when a jersey is selected */}
+      {selectedPlayer && (
+        <div
+          className={`shrink-0 bg-white border-t-2 border-${themeColor}-200 p-3 lg:p-4 space-y-3 shadow-[0_-4px_10px_-1px_rgba(0,0,0,0.05)]`}
+        >
+          {/* Player identity + close */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 min-w-0">
+              <span
+                className={`text-${themeColor}-400 font-black text-xl leading-none shrink-0`}
+              >
+                #{selectedPlayer.jersey}
+              </span>
+              <div className="min-w-0">
+                <p className="text-slate-800 font-black text-sm leading-none truncate">
+                  {selectedPlayer.name}
+                </p>
+                <p className="text-slate-400 text-[8px] font-bold mt-0.5">
+                  {selStats.points} PTS · {selStats.fouls}/5 FLS ·{" "}
+                  {selStats.rebounds} REB · {selStats.assists} AST ·{" "}
+                  {selStats.steals} STL
+                </p>
+              </div>
+            </div>
             <button
-              onClick={() => onStat(player.id, "REBOUND")}
-              className="bg-slate-200 hover:bg-slate-300 text-slate-700 py-1.5 rounded-xl font-black text-[10px] transition-all shadow-sm"
+              onClick={() => onSelectPlayer(selectedPlayer.id)}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 transition-all shrink-0 ml-2"
             >
-              REB
-            </button>
-            <button
-              onClick={() => onStat(player.id, "ASSIST")}
-              className="bg-slate-200 hover:bg-slate-300 text-slate-700 py-1.5 rounded-xl font-black text-[10px] transition-all shadow-sm"
-            >
-              AST
-            </button>
-            <button
-              onClick={() => onStat(player.id, "STEAL")}
-              className="bg-slate-200 hover:bg-slate-300 text-slate-700 py-1.5 rounded-xl font-black text-[10px] transition-all shadow-sm"
-            >
-              STL
+              <X size={14} />
             </button>
           </div>
+
+          {selStats.fouls >= 5 ? (
+            <p className="text-red-400 font-black text-center text-xs py-1.5 bg-red-950/40 rounded-xl border border-red-900/40">
+              FOULED OUT
+            </p>
+          ) : (
+            <>
+              {/* Score buttons */}
+              <div className="grid grid-cols-3 gap-2">
+                {[1, 2, 3].map((pts) => (
+                  <button
+                    key={pts}
+                    onClick={() => onScore(selectedPlayer.id, pts)}
+                    className={`bg-${themeColor}-50 text-${themeColor}-700 border border-${themeColor}-200 hover:bg-${themeColor}-600 hover:text-white py-3 lg:py-4 rounded-xl font-black text-xl transition-all active:scale-95 shadow-sm`}
+                  >
+                    +{pts}
+                  </button>
+                ))}
+              </div>
+              {/* Stat buttons */}
+              <div className="grid grid-cols-4 gap-2">
+                <button
+                  onClick={() => onFoul(selectedPlayer.id)}
+                  className="bg-red-50 border border-red-200 text-red-600 hover:bg-red-600 hover:text-white py-2.5 rounded-xl font-black text-[9px] lg:text-[10px] transition-all active:scale-95 flex flex-col items-center gap-0.5 shadow-sm"
+                >
+                  <ShieldAlert size={13} />
+                  Foul
+                </button>
+                <button
+                  onClick={() => onStat(selectedPlayer.id, "REBOUND")}
+                  className="bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-600 hover:text-white py-2.5 rounded-xl font-black text-[9px] lg:text-[10px] transition-all active:scale-95 shadow-sm"
+                >
+                  REB
+                </button>
+                <button
+                  onClick={() => onStat(selectedPlayer.id, "ASSIST")}
+                  className="bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-600 hover:text-white py-2.5 rounded-xl font-black text-[9px] lg:text-[10px] transition-all active:scale-95 shadow-sm"
+                >
+                  AST
+                </button>
+                <button
+                  onClick={() => onStat(selectedPlayer.id, "STEAL")}
+                  className="bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-600 hover:text-white py-2.5 rounded-xl font-black text-[9px] lg:text-[10px] transition-all active:scale-95 shadow-sm"
+                >
+                  STL
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

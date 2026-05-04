@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import axios from "axios";
 import {
   Users,
@@ -14,12 +14,12 @@ import {
   Edit2,
   Search,
   Clock,
-  Star,
 } from "lucide-react";
 import TeamSelectionModal from "../common/TeamSelectionModal";
 import OfficialGameDetailsModal from "./OfficialGameDetailsModal";
 import ConfirmationModal from "../common/ConfirmationModal";
 import MetadataSelectionModal from "../common/MetadataSelectionModal"; // New import
+import { capitalizeWords } from "../../utils/helpers";
 
 export default function CommitteeDashboardView({
   user,
@@ -51,8 +51,6 @@ export default function CommitteeDashboardView({
   // Separate state for Team A and Team B
   const [teamA, setTeamA] = useState({ name: "", roster: [] });
   const [teamB, setTeamB] = useState({ name: "", roster: [] });
-  const [startingFiveA, setStartingFiveA] = useState([]);
-  const [startingFiveB, setStartingFiveB] = useState([]);
 
   // Input state for adding players
   const [newPlayerA, setNewPlayerA] = useState({ name: "", jersey: "" });
@@ -196,10 +194,8 @@ export default function CommitteeDashboardView({
 
       if (side === "A") {
         setTeamA({ name: team.name, roster });
-        setStartingFiveA([]); // Coach picks starters manually
       } else {
         setTeamB({ name: team.name, roster });
-        setStartingFiveB([]);
       }
       if (!league && team.league) setLeague(team.league);
       if (!season && team.season) setSeason(team.season);
@@ -289,10 +285,8 @@ export default function CommitteeDashboardView({
   const handleRemovePlayer = (side, id) => {
     if (side === "A") {
       setTeamA({ ...teamA, roster: teamA.roster.filter((p) => p.id !== id) });
-      setStartingFiveA((prev) => prev.filter((sid) => sid !== id));
     } else {
       setTeamB({ ...teamB, roster: teamB.roster.filter((p) => p.id !== id) });
-      setStartingFiveB((prev) => prev.filter((sid) => sid !== id));
     }
   };
 
@@ -331,8 +325,6 @@ export default function CommitteeDashboardView({
         teamAPlayerMap: res.data.teamAPlayerMap,
         teamBPlayerMap: res.data.teamBPlayerMap,
         quarterDuration: parseInt(quarterDuration, 10) || 10,
-        startingFiveA,
-        startingFiveB,
       });
     } catch (err) {
       console.error("Initialization error:", err);
@@ -771,16 +763,6 @@ export default function CommitteeDashboardView({
               setupAttempted={setupAttempted}
               userRole={user.role}
               showNotification={showNotification}
-              startingFive={startingFiveA}
-              onToggleStarter={(id) => {
-                if (startingFiveA.includes(id)) {
-                  setStartingFiveA(startingFiveA.filter((sid) => sid !== id));
-                } else if (startingFiveA.length < 5) {
-                  setStartingFiveA([...startingFiveA, id]);
-                } else {
-                  showNotification("Already 5 starters selected for Team A.");
-                }
-              }}
             />
             <TeamEntrySection
               side="B"
@@ -796,16 +778,6 @@ export default function CommitteeDashboardView({
               userRole={user.role}
               setupAttempted={setupAttempted}
               showNotification={showNotification}
-              startingFive={startingFiveB}
-              onToggleStarter={(id) => {
-                if (startingFiveB.includes(id)) {
-                  setStartingFiveB(startingFiveB.filter((sid) => sid !== id));
-                } else if (startingFiveB.length < 5) {
-                  setStartingFiveB([...startingFiveB, id]);
-                } else {
-                  showNotification("Already 5 starters selected for Team B.");
-                }
-              }}
             />
           </div>
 
@@ -887,8 +859,6 @@ function TeamEntrySection({
   setupAttempted,
   userRole,
   showNotification,
-  startingFive = [],
-  onToggleStarter,
 }) {
   const accentBorder = color === "blue" ? "border-blue-500" : "border-red-500";
   const iconColor = color === "blue" ? "text-blue-500" : "text-red-500";
@@ -910,6 +880,7 @@ function TeamEntrySection({
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState("");
   const [editJersey, setEditJersey] = useState("");
+  const jerseyInputRef = useRef(null);
 
   return (
     <div
@@ -1010,48 +981,38 @@ function TeamEntrySection({
           Add to Roster
         </label>
         <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex gap-2">
+            <input
+              ref={jerseyInputRef}
+              className="w-20 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-slate-400 text-center"
+              placeholder="#"
+              value={newPlayer.jersey}
+              onChange={(e) => {
+                const numbersOnly = e.target.value.replace(/[^0-9]/g, "");
+                setNewPlayer({ ...newPlayer, jersey: numbersOnly });
+              }}
+            />
+          </div>
           <input
             className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-slate-400"
             placeholder="Player Name"
             value={newPlayer.name}
-            onChange={(e) =>
-              setNewPlayer({ ...newPlayer, name: e.target.value })
-            }
+            onChange={(e) => {
+              const val = e.target.value.replace(/[^a-zA-Z0-9\s]/g, "");
+              setNewPlayer({ ...newPlayer, name: capitalizeWords(val) });
+            }}
           />
-          <div className="flex gap-2">
-            <input
-              className="w-24 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-slate-400"
-              placeholder="#"
-              value={newPlayer.jersey}
-              onChange={(e) =>
-                setNewPlayer({ ...newPlayer, jersey: e.target.value })
-              }
-            />
-            <button
-              onClick={onAdd}
-              className="flex-1 sm:flex-none p-2.5 rounded-xl bg-slate-900 text-white hover:bg-black transition-colors shadow-md flex items-center justify-center"
-            >
-              <Plus size={24} />
-            </button>
-          </div>
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              onAdd();
+              setTimeout(() => jerseyInputRef.current?.focus(), 10);
+            }}
+            className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-slate-900 text-white hover:bg-black transition-colors shadow-md flex items-center justify-center font-black uppercase text-xs tracking-widest"
+          >
+            <Plus size={16} className="mr-1" /> Add
+          </button>
         </div>
-      </div>
-
-      {/* Starting 5 counter — shows how many starters are picked */}
-      <div className="flex items-center justify-between px-1 mb-1">
-        <span className="text-[10px] font-black uppercase text-slate-500">
-          Roster
-        </span>
-        <span
-          className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full flex items-center gap-1 ${
-            startingFive.length === 5
-              ? "bg-emerald-100 text-emerald-700"
-              : "bg-amber-100 text-amber-700"
-          }`}
-        >
-          <Star size={10} fill={startingFive.length === 5 ? "currentColor" : "none"} />
-          Starting 5: {startingFive.length}/5
-        </span>
       </div>
 
       <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
@@ -1135,18 +1096,6 @@ function TeamEntrySection({
                   </span>
                 </div>
                 <div className="flex gap-1 items-center">
-                  {/* Starter toggle — tap star to add/remove from starting 5 */}
-                  <button
-                    onClick={() => onToggleStarter(p.id)}
-                    title={startingFive.includes(p.id) ? "Remove from starting 5" : "Add to starting 5"}
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
-                      startingFive.includes(p.id)
-                        ? "bg-amber-400 text-slate-900 shadow-sm"
-                        : "bg-slate-100 text-slate-400 hover:bg-amber-100 hover:text-amber-600"
-                    }`}
-                  >
-                    <Star size={14} fill={startingFive.includes(p.id) ? "currentColor" : "none"} />
-                  </button>
                   <button
                     onClick={() => {
                       setEditingId(p.id);
