@@ -20,9 +20,13 @@ export default function OfficialGameDetailsModal({ isOpen, onClose, data }) {
   // --- Dynamic Awards Calculation ---
   const playerStats = {};
   logs.forEach((log) => {
-    if (!log.player_id) return;
-    if (!playerStats[log.player_id]) {
-      playerStats[log.player_id] = {
+    // Use player_id as key when available; fall back to player_name for players
+    // whose official_players row was deleted (player_id becomes NULL but
+    // player_name/player_jersey snapshots are still intact in the log).
+    const playerKey = log.player_id || log.player_name;
+    if (!playerKey) return; // skip team-level events (TIMEOUT, OPPONENT_SCORE, etc.)
+    if (!playerStats[playerKey]) {
+      playerStats[playerKey] = {
         id: log.player_id,
         name: log.player_name,
         jersey: log.jersey,
@@ -34,7 +38,7 @@ export default function OfficialGameDetailsModal({ isOpen, onClose, data }) {
         fouls: 0,
       };
     }
-    const p = playerStats[log.player_id];
+    const p = playerStats[playerKey];
     if (log.action_type === "SCORE" || log.action_type === "SCORE_ADJUST")
       p.points += log.amount || 0;
     else if (log.action_type === "REBOUND") p.rebounds += log.amount || 1;

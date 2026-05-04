@@ -316,7 +316,10 @@ export default function CommitteeLiveView({
 
       switch (event.code) {
         case toggleGameClock:
-          setIsRunning((prev) => !prev); // Toggle game clock
+          setIsRunning((prev) => {
+            if (!prev) setIsShotClockPaused(false); // Unpause shot clock when starting
+            return !prev;
+          });
           break;
         case toggleShotClock:
           tShotClockPause();
@@ -620,7 +623,8 @@ export default function CommitteeLiveView({
   const setInitialJumpBall = (winner) => {
     const arrowPointsTo = winner === "A" ? "B" : "A";
     setPossessionArrow(arrowPointsTo);
-    setIsRunning(true); // Tip-off won — game clock starts immediately
+    setIsRunning(true);
+    setIsShotClockPaused(false); // Start shot clock together with game clock on tip-off
     addLog({
       type: "GAME_START",
       winner,
@@ -875,7 +879,11 @@ export default function CommitteeLiveView({
               <div className="flex flex-col gap-2 w-full mt-4">
                 <div className="flex gap-2 w-full">
                   <button
-                    onClick={() => setIsRunning(!isRunning)}
+                    onClick={() => {
+                      const next = !isRunning;
+                      setIsRunning(next);
+                      if (next) setIsShotClockPaused(false);
+                    }}
                     className={`flex-1 py-4 rounded-xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-1 lg:gap-2 transition-all shadow-md active:scale-95 ${
                       isRunning
                         ? "bg-red-500 hover:bg-red-600 text-white"
