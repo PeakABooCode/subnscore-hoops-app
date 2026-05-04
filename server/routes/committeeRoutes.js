@@ -5,6 +5,7 @@ import {
   getOfficialGames,
   getOfficialGameDetails,
   deleteOfficialGame,
+  updateOfficialPlayer,
 } from "../controllers/committee/officialController.js";
 import { isOfficial } from "../config/middleware/roleMiddleware.js";
 
@@ -25,5 +26,6 @@ router.post("/games/save", isOfficial, saveOfficialGame);
 router.get("/games", isOfficial, getOfficialGames);
 router.get("/games/:id", isOfficial, getOfficialGameDetails);
 router.delete("/games/:id", isOfficial, deleteOfficialGame);
+router.patch("/players/:id", isOfficial, updateOfficialPlayer);
 
 export default router;

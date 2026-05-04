@@ -273,6 +273,46 @@ export const getOfficialGameDetails = async (req, res) => {
   }
 };
 
+export const updateOfficialPlayer = async (req, res) => {
+  const { id } = req.params;
+  const { name, jersey } = req.body;
+  const officialId = req.user.id;
+
+  try {
+    // Verify the player belongs to a team owned by this official
+    const check = await pool.query(
+      `SELECT op.id, op.team_id FROM official_players op
+       JOIN official_teams ot ON op.team_id = ot.id
+       WHERE op.id = $1 AND ot.official_id = $2`,
+      [id, officialId],
+    );
+
+    if (check.rows.length === 0)
+      return res.status(404).json({ error: "Player not found or unauthorized." });
+
+    const teamId = check.rows[0].team_id;
+
+    // Guard against duplicate jersey on the same team
+    const duplicate = await pool.query(
+      `SELECT id FROM official_players WHERE team_id = $1 AND jersey_number = $2 AND id != $3`,
+      [teamId, jersey, id],
+    );
+
+    if (duplicate.rows.length > 0)
+      return res.status(409).json({ error: `Jersey #${jersey} is already taken on this team.` });
+
+    await pool.query(
+      "UPDATE official_players SET name = $1, jersey_number = $2 WHERE id = $3",
+      [name, jersey, id],
+    );
+
+    res.json({ message: "Player updated successfully." });
+  } catch (err) {
+    console.error("Update Player Error:", err);
+    res.status(500).json({ error: "Failed to update player." });
+  }
+};
+
 export const deleteOfficialGame = async (req, res) => {
   const { id } = req.params;
   const officialId = req.user.id;

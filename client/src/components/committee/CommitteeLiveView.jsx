@@ -28,6 +28,7 @@ import {
   ChevronUp,
   ChevronDown,
   ClipboardPaste,
+  Edit2,
 } from "lucide-react";
 import { formatTime, getFibaTimeoutInfo } from "../../utils/helpers";
 import KeyboardSettingsModal from "./KeyboardSettingsModal";
@@ -75,6 +76,10 @@ export default function CommitteeLiveView({
   // --- Late Arrivals State ---
   const [latePlayersA, setLatePlayersA] = useState([]);
   const [latePlayersB, setLatePlayersB] = useState([]);
+
+  // Local copies of rosters so name/jersey edits don't mutate the prop
+  const [localRosterA, setLocalRosterA] = useState(initialData.teamARoster);
+  const [localRosterB, setLocalRosterB] = useState(initialData.teamBRoster);
 
   // State refs to use inside the keyboard listener
   const stateRef = useRef({ selectedPlayerA, selectedPlayerB });
@@ -160,9 +165,9 @@ export default function CommitteeLiveView({
   const playerStats = useMemo(() => {
     const stats = {};
     [
-      ...initialData.teamARoster,
+      ...localRosterA,
       ...latePlayersA,
-      ...initialData.teamBRoster,
+      ...localRosterB,
       ...latePlayersB,
     ].forEach((p) => {
       stats[p.id] = { points: 0, fouls: 0, rebounds: 0, assists: 0, steals: 0 };
@@ -439,11 +444,48 @@ export default function CommitteeLiveView({
   // Helper to find player details from either roster
   const findPlayer = (id) => {
     return [
-      ...initialData.teamARoster,
+      ...localRosterA,
       ...latePlayersA,
-      ...initialData.teamBRoster,
+      ...localRosterB,
       ...latePlayersB,
     ].find((p) => p.id === id);
+  };
+
+  const handleEditPlayer = async (playerId, newName, newJersey) => {
+    // Resolve the DB UUID from the player maps (undefined for late arrivals not yet saved)
+    const dbPlayerId =
+      (teamAPlayerMap || {})[playerId] || (teamBPlayerMap || {})[playerId];
+
+    // Persist to official_players when we have a DB ID (initial roster players).
+    // Late arrivals have no DB ID yet — their record is created on game save.
+    if (dbPlayerId) {
+      try {
+        await axios.patch(`/api/committee/players/${dbPlayerId}`, {
+          name: newName,
+          jersey: newJersey,
+        });
+      } catch (err) {
+        showNotification(
+          err.response?.data?.error || "Failed to update player.",
+        );
+        return; // Don't update local state if DB rejected the change
+      }
+    }
+
+    const update = (roster) =>
+      roster.map((p) =>
+        p.id === playerId ? { ...p, name: newName, jersey: newJersey } : p,
+      );
+    if (localRosterA.some((p) => p.id === playerId))
+      setLocalRosterA(update);
+    else if (latePlayersA.some((p) => p.id === playerId))
+      setLatePlayersA(update);
+    else if (localRosterB.some((p) => p.id === playerId))
+      setLocalRosterB(update);
+    else
+      setLatePlayersB(update);
+
+    showNotification(`Updated to #${newJersey} ${newName}`);
   };
 
   const handleAddLatePlayer = (teamSide, player) => {
@@ -748,7 +790,7 @@ export default function CommitteeLiveView({
         {/* COLUMN 2: Team A Player Grid */}
         <TeamJerseyGrid
           name={initialData.teamAName}
-          players={[...initialData.teamARoster, ...latePlayersA]}
+          players={[...localRosterA, ...latePlayersA]}
           playerStats={playerStats}
           selectedPlayerId={selectedPlayerA}
           onSelectPlayer={(id) => {
@@ -759,6 +801,7 @@ export default function CommitteeLiveView({
           onFoul={(pId) => handleFoul("A", pId)}
           onStat={(pId, type) => handleStat("A", pId, type)}
           onAddLatePlayer={(p) => handleAddLatePlayer("A", p)}
+          onEditPlayer={handleEditPlayer}
           color="blue"
           showNotification={showNotification}
         />
@@ -992,7 +1035,7 @@ export default function CommitteeLiveView({
         {/* COLUMN 4: Team B Player Grid */}
         <TeamJerseyGrid
           name={initialData.teamBName}
-          players={[...initialData.teamBRoster, ...latePlayersB]}
+          players={[...localRosterB, ...latePlayersB]}
           playerStats={playerStats}
           selectedPlayerId={selectedPlayerB}
           onSelectPlayer={(id) => {
@@ -1003,6 +1046,7 @@ export default function CommitteeLiveView({
           onFoul={(pId) => handleFoul("B", pId)}
           onStat={(pId, type) => handleStat("B", pId, type)}
           onAddLatePlayer={(p) => handleAddLatePlayer("B", p)}
+          onEditPlayer={handleEditPlayer}
           color="red"
           showNotification={showNotification}
         />
@@ -1315,6 +1359,7 @@ function TeamJerseyGrid({
   onFoul,
   onStat,
   onAddLatePlayer,
+  onEditPlayer,
   color,
   showNotification,
 }) {
@@ -1326,6 +1371,15 @@ function TeamJerseyGrid({
   const [isAddingLate, setIsAddingLate] = useState(false);
   const [lateName, setLateName] = useState("");
   const [lateJersey, setLateJersey] = useState("");
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editJersey, setEditJersey] = useState("");
+
+  // Reset edit mode whenever the selected player changes
+  useEffect(() => {
+    setIsEditing(false);
+  }, [selectedPlayerId]);
 
   const sorted = useMemo(
     () =>
@@ -1451,32 +1505,84 @@ function TeamJerseyGrid({
         <div
           className={`shrink-0 bg-white border-t-2 border-${themeColor}-200 p-3 lg:p-4 space-y-3 shadow-[0_-4px_10px_-1px_rgba(0,0,0,0.05)]`}
         >
-          {/* Player identity + close */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 min-w-0">
-              <span
-                className={`text-${themeColor}-400 font-black text-xl leading-none shrink-0`}
+          {/* Player identity + edit + close */}
+          {isEditing ? (
+            <div className="flex items-center gap-1.5">
+              <input
+                value={editJersey}
+                onChange={(e) => setEditJersey(e.target.value.replace(/[^0-9]/g, ""))}
+                className="w-12 p-1.5 border border-slate-200 rounded-lg text-sm text-center font-black outline-none focus:border-amber-400 bg-slate-50"
+                placeholder="#"
+              />
+              <input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="flex-1 min-w-0 p-1.5 border border-slate-200 rounded-lg text-sm font-bold outline-none focus:border-amber-400 bg-slate-50"
+                placeholder="Player Name"
+              />
+              <button
+                onClick={() => {
+                  if (!editName.trim() || !editJersey.trim()) return;
+                  const duplicate = players.some(
+                    (p) => p.id !== selectedPlayer.id &&
+                      p.jersey.toString() === editJersey.toString(),
+                  );
+                  if (duplicate) {
+                    showNotification(`Jersey #${editJersey} already in use`);
+                    return;
+                  }
+                  onEditPlayer(selectedPlayer.id, editName.trim(), editJersey.trim());
+                  setIsEditing(false);
+                }}
+                className="bg-emerald-500 hover:bg-emerald-600 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase transition-colors shrink-0"
               >
-                #{selectedPlayer.jersey}
-              </span>
-              <div className="min-w-0">
-                <p className="text-slate-800 font-black text-sm leading-none truncate">
-                  {selectedPlayer.name}
-                </p>
-                <p className="text-slate-400 text-[8px] font-bold mt-0.5">
-                  {selStats.points} PTS · {selStats.fouls}/5 FLS ·{" "}
-                  {selStats.rebounds} REB · {selStats.assists} AST ·{" "}
-                  {selStats.steals} STL
-                </p>
+                Save
+              </button>
+              <button
+                onClick={() => setIsEditing(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 transition-all shrink-0"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={`text-${themeColor}-400 font-black text-xl leading-none shrink-0`}>
+                  #{selectedPlayer.jersey}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-slate-800 font-black text-sm leading-none truncate">
+                    {selectedPlayer.name}
+                  </p>
+                  <p className="text-slate-400 text-[8px] font-bold mt-0.5">
+                    {selStats.points} PTS · {selStats.fouls}/5 FLS ·{" "}
+                    {selStats.rebounds} REB · {selStats.assists} AST ·{" "}
+                    {selStats.steals} STL
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0 ml-2">
+                <button
+                  onClick={() => {
+                    setEditName(selectedPlayer.name);
+                    setEditJersey(selectedPlayer.jersey.toString());
+                    setIsEditing(true);
+                  }}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-all"
+                  title="Edit player"
+                >
+                  <Edit2 size={14} />
+                </button>
+                <button
+                  onClick={() => onSelectPlayer(selectedPlayer.id)}
+                  className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 transition-all"
+                >
+                  <X size={14} />
+                </button>
               </div>
             </div>
-            <button
-              onClick={() => onSelectPlayer(selectedPlayer.id)}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 transition-all shrink-0 ml-2"
-            >
-              <X size={14} />
-            </button>
-          </div>
+          )}
 
           {selStats.fouls >= 5 ? (
             <p className="text-red-400 font-black text-center text-xs py-1.5 bg-red-950/40 rounded-xl border border-red-900/40">
