@@ -824,6 +824,7 @@ export default function StatsView({
                     {stintPlayers.length > 0 ? (
                       stintPlayers.map((id) => {
                         const p = roster.find((r) => r.id === id);
+                        if (!p) return null;
                         const qStats = getQuarterStats(id, q, start, end);
                         return (
                           <div

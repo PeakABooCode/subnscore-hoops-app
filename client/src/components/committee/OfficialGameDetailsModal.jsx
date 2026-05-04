@@ -102,6 +102,29 @@ export default function OfficialGameDetailsModal({ isOpen, onClose, data }) {
       (a, b) => (parseInt(a.jersey, 10) || 0) - (parseInt(b.jersey, 10) || 0),
     );
 
+  // Pseudo-code: find the top performer per stat, but only within the winning team.
+  // ELI5: Like giving gold stars only to the winning team's best players.
+  // Logic: for each stat, compute the max value among winning-team players (ignore 0s).
+  // Data state: leaders = { points: 18, rebounds: 7, ... } or {} if no winner / tie game.
+  const winningTeamPlayers =
+    winningTeam === "A"
+      ? teamAPlayers
+      : winningTeam === "B"
+        ? teamBPlayers
+        : [];
+  const leaders = {};
+  if (winningTeamPlayers.length > 0) {
+    ["points", "rebounds", "assists", "steals", "fouls"].forEach((stat) => {
+      const max = Math.max(...winningTeamPlayers.map((p) => p[stat]));
+      if (max > 0) leaders[stat] = max;
+    });
+  }
+  // Returns true only for the winning-team player who leads that stat category.
+  const isLeader = (player, stat) =>
+    player.team === winningTeam &&
+    leaders[stat] !== undefined &&
+    player[stat] === leaders[stat];
+
   return (
     <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-[10000] backdrop-blur-sm print:static print:inset-auto print:bg-transparent print:p-0 print:block">
       <style type="text/css" media="print">
@@ -124,10 +147,15 @@ export default function OfficialGameDetailsModal({ isOpen, onClose, data }) {
           .max-w-6xl > *:not(.fixed) {
             display: none !important;
           }
-          main, html, body { 
-            padding: 0 !important; 
-            margin: 0 !important; 
+          main, html, body {
+            padding: 0 !important;
+            margin: 0 !important;
             height: auto !important;
+          }
+          /* Force background highlight colors to print */
+          #official-report-modal td {
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
           }
         `}
       </style>
@@ -306,19 +334,19 @@ export default function OfficialGameDetailsModal({ isOpen, onClose, data }) {
                             {p.name}
                           </span>
                         </td>
-                        <td className="p-3 text-center font-black text-slate-800">
+                        <td className={`p-3 text-center font-black ${isLeader(p, "points") ? "bg-amber-50 text-amber-500" : "text-slate-800"}`}>
                           {p.points}
                         </td>
-                        <td className="p-3 text-center font-bold text-slate-600">
+                        <td className={`p-3 text-center font-bold ${isLeader(p, "rebounds") ? "bg-blue-50 text-blue-500" : "text-slate-600"}`}>
                           {p.rebounds}
                         </td>
-                        <td className="p-3 text-center font-bold text-slate-600">
+                        <td className={`p-3 text-center font-bold ${isLeader(p, "assists") ? "bg-purple-50 text-purple-500" : "text-slate-600"}`}>
                           {p.assists}
                         </td>
-                        <td className="p-3 text-center font-bold text-slate-600">
+                        <td className={`p-3 text-center font-bold ${isLeader(p, "steals") ? "bg-green-50 text-green-500" : "text-slate-600"}`}>
                           {p.steals}
                         </td>
-                        <td className="p-3 text-center font-bold text-slate-600">
+                        <td className={`p-3 text-center font-bold ${isLeader(p, "fouls") ? "bg-red-50 text-red-500" : "text-slate-600"}`}>
                           {p.fouls}
                         </td>
                       </tr>
@@ -371,19 +399,19 @@ export default function OfficialGameDetailsModal({ isOpen, onClose, data }) {
                             {p.name}
                           </span>
                         </td>
-                        <td className="p-3 text-center font-black text-slate-800">
+                        <td className={`p-3 text-center font-black ${isLeader(p, "points") ? "bg-amber-50 text-amber-500" : "text-slate-800"}`}>
                           {p.points}
                         </td>
-                        <td className="p-3 text-center font-bold text-slate-600">
+                        <td className={`p-3 text-center font-bold ${isLeader(p, "rebounds") ? "bg-blue-50 text-blue-500" : "text-slate-600"}`}>
                           {p.rebounds}
                         </td>
-                        <td className="p-3 text-center font-bold text-slate-600">
+                        <td className={`p-3 text-center font-bold ${isLeader(p, "assists") ? "bg-purple-50 text-purple-500" : "text-slate-600"}`}>
                           {p.assists}
                         </td>
-                        <td className="p-3 text-center font-bold text-slate-600">
+                        <td className={`p-3 text-center font-bold ${isLeader(p, "steals") ? "bg-green-50 text-green-500" : "text-slate-600"}`}>
                           {p.steals}
                         </td>
-                        <td className="p-3 text-center font-bold text-slate-600">
+                        <td className={`p-3 text-center font-bold ${isLeader(p, "fouls") ? "bg-red-50 text-red-500" : "text-slate-600"}`}>
                           {p.fouls}
                         </td>
                       </tr>
