@@ -153,19 +153,42 @@ export const saveOfficialGame = async (req, res) => {
     await insertLatePlayers(latePlayersB, teamBId);
 
     // 4. Insert logs into official_action_logs
+    // Build a player lookup cache so we only hit the DB once per unique player ID.
+    const playerInfoCache = {};
+    const getPlayerInfo = async (playerId) => {
+      if (!playerId) return { name: null, jersey: null };
+      if (playerInfoCache[playerId]) return playerInfoCache[playerId];
+      const res = await pool.query(
+        "SELECT name, jersey_number FROM official_players WHERE id = $1",
+        [playerId],
+      );
+      const info = res.rows.length > 0
+        ? { name: res.rows[0].name, jersey: res.rows[0].jersey_number }
+        : { name: null, jersey: null };
+      playerInfoCache[playerId] = info;
+      return info;
+    };
+
     if (logs && Array.isArray(logs)) {
       for (const log of logs) {
-        // Map team_side from log properties
         const teamSide = log.team || log.to || log.winner || "A";
         const finalPlayerId =
           latePlayerMap[log.playerId] || log.dbPlayerId || null;
 
+        // Snapshot player name + jersey at save time so the record survives
+        // even if the player is later deleted from official_players.
+        const { name: snapshotName, jersey: snapshotJersey } =
+          await getPlayerInfo(finalPlayerId);
+
         await pool.query(
-          `INSERT INTO official_action_logs (game_id, player_id, action_type, team_side, amount, quarter, time_remaining)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          `INSERT INTO official_action_logs
+             (game_id, player_id, player_name, player_jersey, action_type, team_side, amount, quarter, time_remaining)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
           [
             gameId,
-            finalPlayerId, // Use the mapped DB player ID or the new late player ID
+            finalPlayerId,
+            snapshotName,
+            snapshotJersey,
             log.type,
             teamSide,
             log.amount || 0,
@@ -227,8 +250,12 @@ export const getOfficialGameDetails = async (req, res) => {
       return res.status(404).json({ error: "Game not found or unauthorized." });
     }
 
+    // Use snapshotted player_name/player_jersey stored at save time.
+    // COALESCE falls back to the live JOIN for older records that predate the snapshot columns.
     const logs = await pool.query(
-      `SELECT al.*, p.name as player_name, p.jersey_number as jersey
+      `SELECT al.*,
+              COALESCE(al.player_name, p.name) AS player_name,
+              COALESCE(al.player_jersey, p.jersey_number) AS jersey
        FROM official_action_logs al
        LEFT JOIN official_players p ON al.player_id = p.id
        WHERE al.game_id = $1
